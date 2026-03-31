@@ -20,6 +20,31 @@ export type LoginResponse = TokenResponse & {
   user: Usuario;
 }
 
+export type UsuarioListResponse = {
+  total: number;
+  pagina: number;
+  limite: number;
+  datos: Usuario[];
+}
+
+export type ActualizarUsuarioRequest = {
+  nombre?: string;
+  apellido?: string;
+  mencion?: string;
+  paralelo?: number;
+  activo?: boolean;
+}
+
+export type CrearUsuarioRequest = {
+  nombre: string;
+  apellido: string;
+  correo: string;
+  contrasena: string;
+  rol: string;
+  mencion?: string;
+  paralelo?: number;
+}
+
 export type Estudiante = {
   id: string;
   nombre: string;

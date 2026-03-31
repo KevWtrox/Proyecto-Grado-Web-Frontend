@@ -1,13 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/lib/userStore';
 import { logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-const menuItems = [
-  { id: 'estudiantes', label: 'Lista de Estudiantes' },
-  { id: 'ejercicios', label: 'Ejercicios' },
-];
 
 const mockEstudiantes = [
   { id: '1', nombre: 'Kevin Torrez', puntuacion: 95, ejercicios: 24 },
@@ -34,6 +30,7 @@ const mockUltimoEjercicio = {
 };
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const user = useUserStore((s) => s.user);
   const [activeMenu, setActiveMenu] = useState('dashboard');
 
@@ -48,19 +45,32 @@ export function DashboardPage() {
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveMenu(item.id)}
-              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                activeMenu === item.id
-                  ? 'bg-[#3d7a52] text-[#f5f0e6]'
-                  : 'text-[#a8c4b0] hover:bg-[#3d7a52]/50'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          <button
+            onClick={() => {
+              setActiveMenu('dashboard');
+              navigate('/dashboard');
+            }}
+            className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+              activeMenu === 'dashboard'
+                ? 'bg-[#3d7a52] text-[#f5f0e6]'
+                : 'text-[#a8c4b0] hover:bg-[#3d7a52]/50'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => {
+              setActiveMenu('estudiantes');
+              navigate('/estudiantes');
+            }}
+            className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+              activeMenu === 'estudiantes'
+                ? 'bg-[#3d7a52] text-[#f5f0e6]'
+                : 'text-[#a8c4b0] hover:bg-[#3d7a52]/50'
+            }`}
+          >
+            Lista de Estudiantes
+          </button>
         </nav>
 
         <div className="p-4 border-t border-[#3d7a52]">
