@@ -1,0 +1,978 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { logout } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  getEjercicios,
+  getEjercicio,
+  crearEjercicio,
+  actualizarEjercicio,
+  desactivarEjercicio,
+} from '@/lib/ejercicios';
+import {
+  getCategorias,
+  crearCategoria,
+  actualizarCategoria,
+  desactivarCategoria,
+} from '@/lib/categorias';
+import type {
+  EjercicioResumen,
+  Ejercicio,
+  Compas,
+  Categoria,
+  CrearEjercicioRequest,
+  ActualizarEjercicioRequest,
+  CrearCategoriaRequest,
+  ActualizarCategoriaRequest,
+} from '@/lib/types';
+import { TIPOS_EJERCICIO, COMPASES_VALIDOS } from '@/lib/types';
+import { useUserStore } from '@/lib/userStore';
+
+// ── Tipos internos ────────────────────────────────────────────────────────────
+
+type TabActivo = 'ejercicios' | 'categorias';
+type ModalEjercicio = 'ver' | 'editar' | 'crear' | 'eliminar' | null;
+type ModalCategoria = 'ver' | 'editar' | 'crear' | 'eliminar' | null;
+
+type FormEjercicio = {
+  tipo?: string;
+  subtipo?: string;
+  titulo?: string;
+  descripcion?: string;
+  categoria_id?: string;
+  bpm_referencia?: number;
+  compas?: string;
+  instrucciones?: string;
+  activo?: boolean;
+};
+type FormCategoria = { nombre?: string; descripcion?: string; activo?: boolean };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function tipoLabel(tipo: string) {
+  const map: Record<string, string> = {
+    entonacion: 'Entonación',
+    ritmo: 'Ritmo',
+    dictado: 'Dictado',
+    lectura_vista: 'Lectura a Vista',
+    identificacion: 'Identificación',
+  };
+  return map[tipo] ?? tipo;
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
+
+export function EjerciciosPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const user = useUserStore((s) => s.user);
+
+  const [tab, setTab] = useState<TabActivo>('ejercicios');
+
+  // ── Estado ejercicios ─────────────────────────────────────────────────────
+
+  const [pagEj, setPagEj] = useState(1);
+  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  const [filtroCatId, setFiltroCatId] = useState<string | null>(null);
+  const [filtroActivoEj, setFiltroActivoEj] = useState<boolean | null>(true);
+
+  const [modalEj, setModalEj] = useState<ModalEjercicio>(null);
+  const [ejercicioSel, setEjercicioSel] = useState<EjercicioResumen | null>(null);
+  const [ejercicioDetalle, setEjercicioDetalle] = useState<Ejercicio | null>(null);
+  const [formEj, setFormEj] = useState<FormEjercicio>({});
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const [partituraUrl, setPartituraUrl] = useState<string | null>(null);
+
+  const emptyCompases = (): string[][] => [
+    ['', '', '', ''],
+    ['', '', '', ''],
+    ['', '', '', ''],
+    ['', '', '', ''],
+  ];
+  const [compasesForm, setCompasesForm] = useState<string[][]>(emptyCompases());
+
+  function updateNota(ci: number, ni: number, val: string) {
+    setCompasesForm(prev => prev.map((c, i) => i === ci ? c.map((n, j) => j === ni ? val : n) : c));
+  }
+
+  function compasesFromDetalle(detalle: Ejercicio): string[][] {
+    if (!detalle.compases || detalle.compases.length !== 4) return emptyCompases();
+    return detalle.compases.map(c => [...c.notas] as string[]);
+  }
+
+  function buildCompasesPayload(): Compas[] | null {
+    const filled = compasesForm.every(c => c.every(n => n.trim() !== ''));
+    if (!filled) return null;
+    return compasesForm.map(c => ({ notas: c.map(n => n.trim()) as [string, string, string, string] }));
+  }
+
+  // ── Estado categorías ─────────────────────────────────────────────────────
+
+  const [pagCat, setPagCat] = useState(1);
+  const [filtroActivoCat, setFiltroActivoCat] = useState<boolean>(true);
+  const [modalCat, setModalCat] = useState<ModalCategoria>(null);
+  const [categoriaSel, setCategoriaSel] = useState<Categoria | null>(null);
+  const [formCat, setFormCat] = useState<FormCategoria>({});
+
+  // ── Queries ───────────────────────────────────────────────────────────────
+
+  const { data: dataEj, isLoading: loadingEj } = useQuery({
+    queryKey: ['ejercicios', pagEj, filtroTipo, filtroCatId, filtroActivoEj],
+    queryFn: () => getEjercicios(pagEj, 20, filtroTipo, filtroCatId, filtroActivoEj),
+  });
+
+  const { data: dataCat, isLoading: loadingCat } = useQuery({
+    queryKey: ['categorias', pagCat, filtroActivoCat],
+    queryFn: () => getCategorias(pagCat, 20, filtroActivoCat),
+  });
+
+  const { data: todasCategorias } = useQuery({
+    queryKey: ['categorias-todas'],
+    queryFn: () => getCategorias(1, 100, false),
+  });
+
+  // ── Mutations ejercicios ──────────────────────────────────────────────────
+
+  const crearEjMut = useMutation({
+    mutationFn: (datos: CrearEjercicioRequest) => crearEjercicio(datos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ejercicios'] });
+      toast.success('Ejercicio creado correctamente');
+      setModalEj(null);
+      setFormEj({});
+      setCompasesForm(emptyCompases());
+    },
+    onError: () => toast.error('Error al crear ejercicio'),
+  });
+
+  const editarEjMut = useMutation({
+    mutationFn: ({ id, datos }: { id: string; datos: ActualizarEjercicioRequest }) =>
+      actualizarEjercicio(id, datos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ejercicios'] });
+      toast.success('Ejercicio actualizado correctamente');
+      setModalEj(null);
+    },
+    onError: () => toast.error('Error al actualizar ejercicio'),
+  });
+
+  const eliminarEjMut = useMutation({
+    mutationFn: (id: string) => desactivarEjercicio(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ejercicios'] });
+      toast.success('Ejercicio desactivado correctamente');
+      setModalEj(null);
+    },
+    onError: () => toast.error('Error al desactivar ejercicio'),
+  });
+
+  // ── Mutations categorías ──────────────────────────────────────────────────
+
+  const crearCatMut = useMutation({
+    mutationFn: (datos: CrearCategoriaRequest) => crearCategoria(datos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría creada correctamente');
+      setModalCat(null);
+      setFormCat({});
+    },
+    onError: () => toast.error('Error al crear categoría'),
+  });
+
+  const editarCatMut = useMutation({
+    mutationFn: ({ id, datos }: { id: string; datos: ActualizarCategoriaRequest }) =>
+      actualizarCategoria(id, datos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría actualizada correctamente');
+      setModalCat(null);
+    },
+    onError: () => toast.error('Error al actualizar categoría'),
+  });
+
+  const eliminarCatMut = useMutation({
+    mutationFn: (id: string) => desactivarCategoria(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría desactivada correctamente');
+      setModalCat(null);
+    },
+    onError: () => toast.error('Error al desactivar categoría'),
+  });
+
+  // ── Helpers ejercicios ────────────────────────────────────────────────────
+
+  const totalPagEj = dataEj ? Math.ceil(dataEj.total / 20) : 1;
+  const totalPagCat = dataCat ? Math.ceil(dataCat.total / 20) : 1;
+
+  const nombreCategoria = (id: string) =>
+    todasCategorias?.categorias.find((c) => c.id === id)?.nombre ?? id;
+
+  async function abrirVerEjercicio(ej: EjercicioResumen) {
+    setEjercicioSel(ej);
+    setEjercicioDetalle(null);
+    setPartituraUrl(null);
+    setModalEj('ver');
+    setLoadingDetalle(true);
+    try {
+      const detalle = await getEjercicio(ej.id);
+      setEjercicioDetalle(detalle);
+      if (detalle.partitura_base64) {
+        setPartituraUrl(`data:image/png;base64,${detalle.partitura_base64}`);
+      }
+    } catch {
+      toast.error('No se pudo cargar el detalle del ejercicio');
+    } finally {
+      setLoadingDetalle(false);
+    }
+  }
+
+  async function abrirEditarEjercicio(ej: EjercicioResumen) {
+    setEjercicioSel(ej);
+    setFormEj({
+      tipo: ej.tipo,
+      subtipo: ej.subtipo,
+      titulo: ej.titulo,
+      descripcion: ej.descripcion,
+      categoria_id: ej.categoria_id,
+      bpm_referencia: ej.bpm_referencia,
+      compas: ej.compas,
+      activo: ej.activo,
+    });
+    setCompasesForm(emptyCompases());
+    setModalEj('editar');
+    try {
+      const detalle = await getEjercicio(ej.id);
+      setCompasesForm(compasesFromDetalle(detalle));
+      if (detalle.instrucciones) setFormEj(prev => ({ ...prev, instrucciones: detalle.instrucciones }));
+    } catch {
+      // compases quedan vacíos; el usuario puede ingresarlos manualmente
+    }
+  }
+
+  function guardarCrearEjercicio() {
+    if (!formEj.tipo || !formEj.subtipo || !formEj.titulo || !formEj.descripcion || !formEj.categoria_id) {
+      toast.error('Completa todos los campos obligatorios');
+      return;
+    }
+    const compases = buildCompasesPayload();
+    if (!compases) {
+      toast.error('Completa las 16 notas de los 4 compases');
+      return;
+    }
+    crearEjMut.mutate({
+      tipo: formEj.tipo!,
+      subtipo: formEj.subtipo!,
+      titulo: formEj.titulo!,
+      descripcion: formEj.descripcion!,
+      categoria_id: formEj.categoria_id!,
+      compases,
+      bpm_referencia: formEj.bpm_referencia ?? 60,
+      compas: formEj.compas ?? '4/4',
+      instrucciones: formEj.instrucciones,
+    });
+  }
+
+  function guardarEditarEjercicio() {
+    if (!ejercicioSel) return;
+    const compases = buildCompasesPayload();
+    editarEjMut.mutate({
+      id: ejercicioSel.id,
+      datos: {
+        tipo: formEj.tipo,
+        subtipo: formEj.subtipo,
+        titulo: formEj.titulo,
+        descripcion: formEj.descripcion,
+        categoria_id: formEj.categoria_id,
+        bpm_referencia: formEj.bpm_referencia,
+        compas: formEj.compas,
+        instrucciones: formEj.instrucciones,
+        activo: formEj.activo,
+        ...(compases ? { compases } : {}),
+      },
+    });
+  }
+
+  // ── Helpers categorías ────────────────────────────────────────────────────
+
+  function guardarCrearCategoria() {
+    if (!formCat.nombre || !formCat.descripcion) {
+      toast.error('Nombre y descripción son obligatorios');
+      return;
+    }
+    crearCatMut.mutate({
+      nombre: formCat.nombre!,
+      descripcion: formCat.descripcion!,
+    });
+  }
+
+  function guardarEditarCategoria() {
+    if (!categoriaSel) return;
+    editarCatMut.mutate({
+      id: categoriaSel.id,
+      datos: {
+        nombre: formCat.nombre,
+        descripcion: formCat.descripcion,
+        activo: formCat.activo,
+      },
+    });
+  }
+
+  // ── Render sidebar ────────────────────────────────────────────────────────
+
+  const sidebar = (
+    <aside className="w-64 bg-[#2d5a3d] text-[#f5f0e6] flex flex-col shadow-xl">
+      <div className="p-4 border-b border-[#3d7a52]">
+        <h1 className="text-xl font-bold">AudioLearn</h1>
+        <p className="text-xs text-[#a8c4b0]">Panel Admin</p>
+      </div>
+
+      <nav className="flex-1 p-4 space-y-2">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => navigate('/estudiantes')}
+          className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
+        >
+          Lista de Estudiantes
+        </button>
+        <button
+          className="w-full text-left px-4 py-2 rounded-lg bg-[#3d7a52] text-[#f5f0e6]"
+        >
+          Gestión de Ejercicios
+        </button>
+      </nav>
+
+      <div className="p-4 border-t border-[#3d7a52]">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-[#f5f0e6] text-[#2d5a3d] flex items-center justify-center font-bold">
+            {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{user?.nombre} {user?.apellido}</p>
+            <p className="text-xs text-[#a8c4b0] truncate">{user?.correo}</p>
+          </div>
+        </div>
+        <Button
+          onClick={logout}
+          variant="outline"
+          className="w-full border-[#c4b896] text-[#2d5a3d] hover:bg-[#c4b896]/30 bg-transparent"
+        >
+          Cerrar Sesión
+        </Button>
+      </div>
+    </aside>
+  );
+
+  // ── Render tab ejercicios ─────────────────────────────────────────────────
+
+  const tabEjercicios = (
+    <div>
+      {/* Filtros */}
+      <Card className="border-0 shadow-lg mb-6">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Tipo</label>
+              <select
+                className="w-full p-2 border rounded-md bg-white"
+                value={filtroTipo ?? ''}
+                onChange={(e) => { setFiltroTipo(e.target.value || null); setPagEj(1); }}
+              >
+                <option value="">Todos</option>
+                {TIPOS_EJERCICIO.map((t) => (
+                  <option key={t} value={t}>{tipoLabel(t)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Categoría</label>
+              <select
+                className="w-full p-2 border rounded-md bg-white"
+                value={filtroCatId ?? ''}
+                onChange={(e) => { setFiltroCatId(e.target.value || null); setPagEj(1); }}
+              >
+                <option value="">Todas</option>
+                {todasCategorias?.categorias.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Estado</label>
+              <select
+                className="w-full p-2 border rounded-md bg-white"
+                value={filtroActivoEj === null ? '' : filtroActivoEj.toString()}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFiltroActivoEj(v === '' ? null : v === 'true');
+                  setPagEj(1);
+                }}
+              >
+                <option value="true">Activos</option>
+                <option value="false">Inactivos</option>
+                <option value="">Todos</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabla */}
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f5f0e6]">
+                <tr>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Título</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Tipo</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Subtipo</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Categoría</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">BPM</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Compás</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Estado</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingEj ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Cargando ejercicios...</td></tr>
+                ) : dataEj?.ejercicios.length === 0 ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">No hay ejercicios</td></tr>
+                ) : (
+                  dataEj?.ejercicios.map((ej) => {
+                    return (
+                      <tr key={ej.id} className="border-t border-[#e5e4e7] hover:bg-[#f5f0e6]/50">
+                        <td className="p-4 font-medium max-w-[200px] truncate">{ej.titulo}</td>
+                        <td className="p-4">
+                          <span className="px-2 py-1 rounded text-xs bg-[#2d5a3d]/10 text-[#2d5a3d]">
+                            {tipoLabel(ej.tipo)}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm">{ej.subtipo}</td>
+                        <td className="p-4 text-sm">{nombreCategoria(ej.categoria_id)}</td>
+                        <td className="p-4 text-sm">{ej.bpm_referencia}</td>
+                        <td className="p-4 text-sm">{ej.compas}</td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded text-xs ${ej.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {ej.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => abrirVerEjercicio(ej)} className="border-[#2d5a3d] text-[#2d5a3d]">Ver</Button>
+                            <Button size="sm" variant="outline" onClick={() => abrirEditarEjercicio(ej)} className="border-[#2d5a3d] text-[#2d5a3d]">Editar</Button>
+                            <Button size="sm" variant="outline" onClick={() => { setEjercicioSel(ej); setModalEj('eliminar'); }} className="border-red-300 text-red-600 hover:bg-red-50">Eliminar</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between p-4 border-t border-[#e5e4e7]">
+            <span className="text-sm text-muted-foreground">
+              Página {pagEj} de {totalPagEj} ({dataEj?.total ?? 0} ejercicios)
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={pagEj <= 1} onClick={() => setPagEj(p => p - 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Anterior</Button>
+              <Button variant="outline" disabled={pagEj >= totalPagEj} onClick={() => setPagEj(p => p + 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Siguiente</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ── Render tab categorías ─────────────────────────────────────────────────
+
+  const tabCategorias = (
+    <div>
+      <Card className="border-0 shadow-lg mb-6">
+        <CardContent className="pt-6">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium mb-2 block">Estado</label>
+              <select
+                className="w-full p-2 border rounded-md bg-white"
+                value={filtroActivoCat.toString()}
+                onChange={(e) => { setFiltroActivoCat(e.target.value === 'true'); setPagCat(1); }}
+              >
+                <option value="true">Solo activas</option>
+                <option value="false">Todas</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f5f0e6]">
+                <tr>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Nombre</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Descripción</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Estado</th>
+                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingCat ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Cargando categorías...</td></tr>
+                ) : dataCat?.categorias.length === 0 ? (
+                  <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No hay categorías</td></tr>
+                ) : (
+                  dataCat?.categorias.map((cat) => (
+                    <tr key={cat.id} className="border-t border-[#e5e4e7] hover:bg-[#f5f0e6]/50">
+                      <td className="p-4 font-medium">{cat.nombre}</td>
+                      <td className="p-4 text-sm max-w-[400px] truncate">{cat.descripcion}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs ${cat.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {cat.activo ? 'Activa' : 'Inactiva'}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm" variant="outline"
+                            onClick={() => { setCategoriaSel(cat); setModalCat('ver'); }}
+                            className="border-[#2d5a3d] text-[#2d5a3d]"
+                          >Ver</Button>
+                          <Button
+                            size="sm" variant="outline"
+                            onClick={() => {
+                              setCategoriaSel(cat);
+                              setFormCat({ nombre: cat.nombre, descripcion: cat.descripcion, activo: cat.activo });
+                              setModalCat('editar');
+                            }}
+                            className="border-[#2d5a3d] text-[#2d5a3d]"
+                          >Editar</Button>
+                          <Button
+                            size="sm" variant="outline"
+                            onClick={() => { setCategoriaSel(cat); setModalCat('eliminar'); }}
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                          >Eliminar</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between p-4 border-t border-[#e5e4e7]">
+            <span className="text-sm text-muted-foreground">
+              Página {pagCat} de {totalPagCat} ({dataCat?.total ?? 0} categorías)
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={pagCat <= 1} onClick={() => setPagCat(p => p - 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Anterior</Button>
+              <Button variant="outline" disabled={pagCat >= totalPagCat} onClick={() => setPagCat(p => p + 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Siguiente</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ── Formulario ejercicio (crear / editar) ─────────────────────────────────
+
+  const formEjercicioFields = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium mb-1 block">Tipo *</label>
+          <select
+            className="w-full p-2 border rounded-md"
+            value={formEj.tipo ?? ''}
+            onChange={(e) => setFormEj({ ...formEj, tipo: e.target.value })}
+          >
+            <option value="">Seleccionar tipo</option>
+            {TIPOS_EJERCICIO.map((t) => (
+              <option key={t} value={t}>{tipoLabel(t)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm font-medium mb-1 block">Subtipo *</label>
+          <Input
+            placeholder="Ej: escalas mayores"
+            value={formEj.subtipo ?? ''}
+            onChange={(e) => setFormEj({ ...formEj, subtipo: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium mb-1 block">Título *</label>
+        <Input
+          placeholder="Título del ejercicio"
+          value={formEj.titulo ?? ''}
+          onChange={(e) => setFormEj({ ...formEj, titulo: e.target.value })}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium mb-1 block">Descripción *</label>
+        <textarea
+          className="w-full p-2 border rounded-md text-sm resize-none"
+          rows={3}
+          placeholder="Descripción del ejercicio"
+          value={formEj.descripcion ?? ''}
+          onChange={(e) => setFormEj({ ...formEj, descripcion: e.target.value })}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium mb-1 block">Categoría *</label>
+        <select
+          className="w-full p-2 border rounded-md"
+          value={formEj.categoria_id ?? ''}
+          onChange={(e) => setFormEj({ ...formEj, categoria_id: e.target.value })}
+        >
+          <option value="">Seleccionar categoría</option>
+          {todasCategorias?.categorias.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium mb-1 block">BPM</label>
+          <Input
+            type="number" min={20} max={300}
+            placeholder="60"
+            value={formEj.bpm_referencia ?? ''}
+            onChange={(e) => setFormEj({ ...formEj, bpm_referencia: Number(e.target.value) })}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium mb-1 block">Compás</label>
+          <select
+            className="w-full p-2 border rounded-md"
+            value={formEj.compas ?? '4/4'}
+            onChange={(e) => setFormEj({ ...formEj, compas: e.target.value })}
+          >
+            {COMPASES_VALIDOS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium mb-1 block">Instrucciones</label>
+        <textarea
+          className="w-full p-2 border rounded-md text-sm resize-none"
+          rows={2}
+          placeholder="Instrucciones para el estudiante (opcional)"
+          value={formEj.instrucciones ?? ''}
+          onChange={(e) => setFormEj({ ...formEj, instrucciones: e.target.value })}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium mb-2 block">
+          Compases — 4 notas por compás *
+        </label>
+        <div className="space-y-2">
+          {compasesForm.map((compas, ci) => (
+            <div key={ci} className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">
+                Compás {ci + 1}
+              </span>
+              {compas.map((nota, ni) => (
+                <Input
+                  key={ni}
+                  placeholder={['Do', 'Re', 'Mi', 'Fa'][ni]}
+                  value={nota}
+                  onChange={(e) => updateNota(ci, ni, e.target.value)}
+                  className="text-center text-sm"
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Notación española (Do, Re, Mi…) o inglesa (C, D, E…). Acepta sostenidos (#) y bemoles (b).
+        </p>
+      </div>
+    </div>
+  );
+
+  // ── Modales ejercicios ────────────────────────────────────────────────────
+
+  const modalEjercicios = modalEj && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <CardHeader>
+          <CardTitle className="text-[#2d5a3d]">
+            {modalEj === 'ver' && 'Detalle del Ejercicio'}
+            {modalEj === 'editar' && 'Editar Ejercicio'}
+            {modalEj === 'crear' && 'Crear Ejercicio'}
+            {modalEj === 'eliminar' && 'Desactivar Ejercicio'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {modalEj === 'ver' && ejercicioSel && (
+            <div className="space-y-4">
+              {loadingDetalle ? (
+                <p className="text-center text-muted-foreground py-4">Cargando detalle...</p>
+              ) : ejercicioDetalle ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><p className="text-muted-foreground">Título</p><p className="font-medium">{ejercicioDetalle.titulo}</p></div>
+                    <div><p className="text-muted-foreground">Tipo</p><p>{tipoLabel(ejercicioDetalle.tipo)}</p></div>
+                    <div><p className="text-muted-foreground">Subtipo</p><p>{ejercicioDetalle.subtipo}</p></div>
+                    <div><p className="text-muted-foreground">Categoría</p><p>{nombreCategoria(ejercicioDetalle.categoria_id)}</p></div>
+                    <div><p className="text-muted-foreground">BPM</p><p>{ejercicioDetalle.bpm_referencia}</p></div>
+                    <div><p className="text-muted-foreground">Compás</p><p>{ejercicioDetalle.compas}</p></div>
+                    <div className="col-span-2"><p className="text-muted-foreground">Descripción</p><p>{ejercicioDetalle.descripcion}</p></div>
+                    {ejercicioDetalle.instrucciones && (
+                      <div className="col-span-2"><p className="text-muted-foreground">Instrucciones</p><p>{ejercicioDetalle.instrucciones}</p></div>
+                    )}
+                  </div>
+
+                  {partituraUrl && (
+                    <div>
+                      <p className="text-sm font-medium text-[#2d5a3d] mb-2">Partitura</p>
+                      <img
+                        src={partituraUrl}
+                        alt="Partitura del ejercicio"
+                        className="w-full rounded border border-[#c4b896] bg-white"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : null}
+              <Button onClick={() => setModalEj(null)} className="w-full bg-[#2d5a3d] text-[#f5f0e6]">Cerrar</Button>
+            </div>
+          )}
+
+          {modalEj === 'crear' && (
+            <div>
+              {formEjercicioFields}
+              <div className="flex gap-2 pt-4">
+                <Button onClick={guardarCrearEjercicio} className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]" disabled={crearEjMut.isPending}>
+                  {crearEjMut.isPending ? 'Creando...' : 'Crear'}
+                </Button>
+                <Button onClick={() => { setModalEj(null); setFormEj({}); }} variant="outline" className="flex-1">Cancelar</Button>
+              </div>
+            </div>
+          )}
+
+          {modalEj === 'editar' && (
+            <div>
+              <div className="mb-4">
+                <label className="text-sm font-medium mb-1 block">Estado</label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={formEj.activo?.toString() ?? 'true'}
+                  onChange={(e) => setFormEj({ ...formEj, activo: e.target.value === 'true' })}
+                >
+                  <option value="true">Activo</option>
+                  <option value="false">Inactivo</option>
+                </select>
+              </div>
+              {formEjercicioFields}
+              <div className="flex gap-2 pt-4">
+                <Button onClick={guardarEditarEjercicio} className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]" disabled={editarEjMut.isPending}>
+                  {editarEjMut.isPending ? 'Guardando...' : 'Guardar'}
+                </Button>
+                <Button onClick={() => setModalEj(null)} variant="outline" className="flex-1">Cancelar</Button>
+              </div>
+            </div>
+          )}
+
+          {modalEj === 'eliminar' && ejercicioSel && (
+            <div className="text-center">
+              <p className="mb-2">¿Desactivar el ejercicio <strong>"{ejercicioSel.titulo}"</strong>?</p>
+              <p className="text-sm text-muted-foreground mb-4">El ejercicio quedará inactivo pero no será eliminado del sistema.</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => eliminarEjMut.mutate(ejercicioSel.id)}
+                  className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                  disabled={eliminarEjMut.isPending}
+                >
+                  {eliminarEjMut.isPending ? 'Desactivando...' : 'Desactivar'}
+                </Button>
+                <Button onClick={() => setModalEj(null)} variant="outline" className="flex-1">Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ── Modales categorías ────────────────────────────────────────────────────
+
+  const modalCategorias = modalCat && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <CardHeader>
+          <CardTitle className="text-[#2d5a3d]">
+            {modalCat === 'ver' && 'Detalle de Categoría'}
+            {modalCat === 'editar' && 'Editar Categoría'}
+            {modalCat === 'crear' && 'Crear Categoría'}
+            {modalCat === 'eliminar' && 'Desactivar Categoría'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {modalCat === 'ver' && categoriaSel && (
+            <div className="space-y-3">
+              <div className="space-y-3 text-sm">
+                <div><p className="text-muted-foreground">Nombre</p><p className="font-medium">{categoriaSel.nombre}</p></div>
+                <div><p className="text-muted-foreground">Descripción</p><p>{categoriaSel.descripcion}</p></div>
+                <div className="flex gap-6">
+                  <div><p className="text-muted-foreground">Estado</p><span className={`px-2 py-1 rounded text-xs ${categoriaSel.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{categoriaSel.activo ? 'Activa' : 'Inactiva'}</span></div>
+                  <div><p className="text-muted-foreground">Creada</p><p>{new Date(categoriaSel.fecha_creacion).toLocaleDateString()}</p></div>
+                </div>
+              </div>
+              <Button onClick={() => setModalCat(null)} className="w-full bg-[#2d5a3d] text-[#f5f0e6]">Cerrar</Button>
+            </div>
+          )}
+
+          {(modalCat === 'crear' || modalCat === 'editar') && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Nombre *</label>
+                <Input
+                  placeholder="Nombre de la categoría"
+                  value={formCat.nombre ?? ''}
+                  onChange={(e) => setFormCat({ ...formCat, nombre: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Descripción *</label>
+                <textarea
+                  className="w-full p-2 border rounded-md text-sm resize-none"
+                  rows={4}
+                  placeholder="Descripción de la categoría"
+                  value={formCat.descripcion ?? ''}
+                  onChange={(e) => setFormCat({ ...formCat, descripcion: e.target.value })}
+                />
+              </div>
+              {modalCat === 'editar' && (
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Estado</label>
+                  <select
+                    className="w-full p-2 border rounded-md"
+                    value={formCat.activo?.toString() ?? 'true'}
+                    onChange={(e) => setFormCat({ ...formCat, activo: e.target.value === 'true' })}
+                  >
+                    <option value="true">Activa</option>
+                    <option value="false">Inactiva</option>
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  onClick={modalCat === 'crear' ? guardarCrearCategoria : guardarEditarCategoria}
+                  className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]"
+                  disabled={crearCatMut.isPending || editarCatMut.isPending}
+                >
+                  {(crearCatMut.isPending || editarCatMut.isPending) ? 'Guardando...' : (modalCat === 'crear' ? 'Crear' : 'Guardar')}
+                </Button>
+                <Button onClick={() => { setModalCat(null); setFormCat({}); }} variant="outline" className="flex-1">Cancelar</Button>
+              </div>
+            </div>
+          )}
+
+          {modalCat === 'eliminar' && categoriaSel && (
+            <div className="text-center">
+              <p className="mb-2">¿Desactivar la categoría <strong>"{categoriaSel.nombre}"</strong>?</p>
+              <p className="text-sm text-muted-foreground mb-4">Los ejercicios asociados no serán eliminados.</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => eliminarCatMut.mutate(categoriaSel.id)}
+                  className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                  disabled={eliminarCatMut.isPending}
+                >
+                  {eliminarCatMut.isPending ? 'Desactivando...' : 'Desactivar'}
+                </Button>
+                <Button onClick={() => setModalCat(null)} variant="outline" className="flex-1">Cancelar</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ── Layout principal ──────────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen flex bg-[#f5f0e6]">
+      {sidebar}
+
+      <main className="flex-1 p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-[#2d5a3d]">Gestión de Ejercicios</h1>
+          <Button
+            onClick={() => {
+              if (tab === 'ejercicios') {
+                setFormEj({ bpm_referencia: 60, compas: '4/4' });
+                setModalEj('crear');
+              } else {
+                setFormCat({});
+                setModalCat('crear');
+              }
+            }}
+            className="bg-[#2d5a3d] hover:bg-[#1e3d29] text-[#f5f0e6]"
+          >
+            + {tab === 'ejercicios' ? 'Nuevo Ejercicio' : 'Nueva Categoría'}
+          </Button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-white rounded-lg p-1 w-fit shadow-sm border border-[#c4b896]/30">
+          <button
+            onClick={() => setTab('ejercicios')}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+              tab === 'ejercicios'
+                ? 'bg-[#2d5a3d] text-[#f5f0e6]'
+                : 'text-[#2d5a3d] hover:bg-[#f5f0e6]'
+            }`}
+          >
+            Ejercicios
+          </button>
+          <button
+            onClick={() => setTab('categorias')}
+            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+              tab === 'categorias'
+                ? 'bg-[#2d5a3d] text-[#f5f0e6]'
+                : 'text-[#2d5a3d] hover:bg-[#f5f0e6]'
+            }`}
+          >
+            Categorías
+          </button>
+        </div>
+
+        {tab === 'ejercicios' ? tabEjercicios : tabCategorias}
+      </main>
+
+      {modalEjercicios}
+      {modalCategorias}
+    </div>
+  );
+}

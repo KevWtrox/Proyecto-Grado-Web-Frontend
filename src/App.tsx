@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { EstudiantesPage } from '@/pages/EstudiantesPage';
+import { EjerciciosPage } from '@/pages/EjerciciosPage';
 import { useUserStore } from '@/lib/userStore';
 
 const queryClient = new QueryClient();
@@ -25,6 +26,9 @@ export default function App() {
           } />
           <Route path="/estudiantes" element={
             <ProtectedRoute><EstudiantesPage /></ProtectedRoute>
+          } />
+          <Route path="/ejercicios" element={
+            <ProtectedRoute><EjerciciosPage /></ProtectedRoute>
           } />
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>

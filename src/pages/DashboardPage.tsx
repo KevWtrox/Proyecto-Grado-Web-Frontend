@@ -71,6 +71,19 @@ export function DashboardPage() {
           >
             Lista de Estudiantes
           </button>
+          <button
+            onClick={() => {
+              setActiveMenu('ejercicios');
+              navigate('/ejercicios');
+            }}
+            className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+              activeMenu === 'ejercicios'
+                ? 'bg-[#3d7a52] text-[#f5f0e6]'
+                : 'text-[#a8c4b0] hover:bg-[#3d7a52]/50'
+            }`}
+          >
+            Gestión de Ejercicios
+          </button>
         </nav>
 
         <div className="p-4 border-t border-[#3d7a52]">

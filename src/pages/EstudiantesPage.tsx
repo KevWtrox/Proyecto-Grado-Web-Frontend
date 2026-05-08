@@ -164,6 +164,12 @@ export function EstudiantesPage() {
           >
             Lista de Estudiantes
           </button>
+          <button
+            onClick={() => navigate('/ejercicios')}
+            className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
+          >
+            Gestión de Ejercicios
+          </button>
         </nav>
 
         <div className="p-4 border-t border-[#3d7a52]">
