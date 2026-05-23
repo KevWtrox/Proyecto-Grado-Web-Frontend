@@ -1,6 +1,7 @@
-import { api } from './api';
-import type { LoginResponse, TokenResponse, Usuario } from './types';
-import { useUserStore } from './userStore';
+import { api } from '@/core/http/api';
+import { useUserStore } from '@/core/store/userStore';
+import type { LoginResponse, TokenResponse } from '@/features/auth/types/auth.types';
+import type { Usuario } from '@/features/usuarios/types/usuarios.types';
 
 const MOCK_MODE = false;
 
@@ -26,18 +27,13 @@ export async function login(correo: string, contrasena: string): Promise<LoginRe
     await new Promise((resolve) => setTimeout(resolve, 1000));
     return mockUser;
   }
-  
+
   const { data: tokens } = await api.post<TokenResponse>('/auth/login', { correo, contrasena });
-  
   localStorage.setItem('token', tokens.access_token);
   localStorage.setItem('refresh_token', tokens.refresh_token || '');
-  
+
   const { data: user } = await api.get<Usuario>('/auth/me');
-  
-  return {
-    ...tokens,
-    user,
-  };
+  return { ...tokens, user };
 }
 
 export async function getCurrentUser(): Promise<Usuario> {

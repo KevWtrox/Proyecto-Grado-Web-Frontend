@@ -4,7 +4,5 @@ const EXERCISES_API_URL = import.meta.env.VITE_EXERCISES_BACKEND_URL || 'http://
 
 export const ejerciciosApi = axios.create({
   baseURL: EXERCISES_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });

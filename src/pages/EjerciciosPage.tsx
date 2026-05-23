@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
-import { logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { MainLayout as Layout } from '@/layouts/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,25 +11,87 @@ import {
   crearEjercicio,
   actualizarEjercicio,
   desactivarEjercicio,
-} from '@/lib/ejercicios';
+} from '@/features/ejercicios/services/ejercicios.service';
 import {
   getCategorias,
   crearCategoria,
   actualizarCategoria,
   desactivarCategoria,
-} from '@/lib/categorias';
+} from '@/features/categorias/services/categorias.service';
 import type {
   EjercicioResumen,
   Ejercicio,
   Compas,
-  Categoria,
   CrearEjercicioRequest,
   ActualizarEjercicioRequest,
+} from '@/features/ejercicios/types/ejercicios.types';
+import type {
+  Categoria,
   CrearCategoriaRequest,
   ActualizarCategoriaRequest,
-} from '@/lib/types';
-import { TIPOS_EJERCICIO, COMPASES_VALIDOS } from '@/lib/types';
-import { useUserStore } from '@/lib/userStore';
+} from '@/features/categorias/types/categorias.types';
+import { TIPOS_EJERCICIO, COMPASES_VALIDOS } from '@/features/ejercicios/types/ejercicios.types';
+
+// ── Selector de nota (dropdown + escritura libre) ────────────────────────────
+
+const NOTAS_ES = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do#', 'Re#', 'Fa#', 'Sol#', 'La#', 'Reb', 'Mib', 'Solb', 'Lab', 'Sib'];
+const NOTAS_EN = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C#', 'D#', 'F#', 'G#', 'A#', 'Db', 'Eb', 'Gb', 'Ab', 'Bb'];
+const NOTAS_TODAS = [...NOTAS_ES, ...NOTAS_EN];
+const CUSTOM = '__custom__';
+
+function SelectorNota({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const esPersonalizado = value !== '' && !NOTAS_TODAS.includes(value);
+  const [modoEscritura, setModoEscritura] = useState(esPersonalizado);
+
+  if (modoEscritura) {
+    return (
+      <div className="flex gap-1 flex-1">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder ?? 'Nota'}
+          autoFocus
+          className="flex-1 min-w-0 px-2 py-1 border rounded-md text-sm text-center bg-input-background text-foreground border-border focus:outline-none focus:ring-2 focus:ring-ring/40"
+        />
+        <button
+          type="button"
+          title="Volver al selector"
+          onClick={() => { onChange(''); setModoEscritura(false); }}
+          className="px-2 text-xs text-muted-foreground hover:text-foreground border rounded-md shrink-0"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      className="flex-1 min-w-0 px-1 py-1 border rounded-md text-sm text-center bg-input-background text-foreground border-border focus:outline-none focus:ring-2 focus:ring-ring/40"
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === CUSTOM) {
+          setModoEscritura(true);
+          onChange('');
+        } else {
+          onChange(e.target.value);
+        }
+      }}
+    >
+      <option value="">{placeholder ?? 'Nota'}</option>
+      <optgroup label="Español">
+        {NOTAS_ES.map((n) => <option key={n} value={n}>{n}</option>)}
+      </optgroup>
+      <optgroup label="Inglés">
+        {NOTAS_EN.map((n) => <option key={n} value={n}>{n}</option>)}
+      </optgroup>
+      <optgroup label="─────────────">
+        <option value={CUSTOM}>✏️ Escribir nota...</option>
+      </optgroup>
+    </select>
+  );
+}
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
@@ -67,9 +128,7 @@ function tipoLabel(tipo: string) {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function EjerciciosPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const user = useUserStore((s) => s.user);
 
   const [tab, setTab] = useState<TabActivo>('ejercicios');
 
@@ -225,7 +284,7 @@ export function EjerciciosPage() {
       const detalle = await getEjercicio(ej.id);
       setEjercicioDetalle(detalle);
       if (detalle.partitura_base64) {
-        setPartituraUrl(`data:image/png;base64,${detalle.partitura_base64}`);
+        setPartituraUrl(`data:image/svg+xml;base64,${detalle.partitura_base64}`);
       }
     } catch {
       toast.error('No se pudo cargar el detalle del ejercicio');
@@ -325,56 +384,6 @@ export function EjerciciosPage() {
     });
   }
 
-  // ── Render sidebar ────────────────────────────────────────────────────────
-
-  const sidebar = (
-    <aside className="w-64 bg-[#2d5a3d] text-[#f5f0e6] flex flex-col shadow-xl">
-      <div className="p-4 border-b border-[#3d7a52]">
-        <h1 className="text-xl font-bold">AudioLearn</h1>
-        <p className="text-xs text-[#a8c4b0]">Panel Admin</p>
-      </div>
-
-      <nav className="flex-1 p-4 space-y-2">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
-        >
-          Dashboard
-        </button>
-        <button
-          onClick={() => navigate('/estudiantes')}
-          className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
-        >
-          Lista de Estudiantes
-        </button>
-        <button
-          className="w-full text-left px-4 py-2 rounded-lg bg-[#3d7a52] text-[#f5f0e6]"
-        >
-          Gestión de Ejercicios
-        </button>
-      </nav>
-
-      <div className="p-4 border-t border-[#3d7a52]">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-[#f5f0e6] text-[#2d5a3d] flex items-center justify-center font-bold">
-            {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{user?.nombre} {user?.apellido}</p>
-            <p className="text-xs text-[#a8c4b0] truncate">{user?.correo}</p>
-          </div>
-        </div>
-        <Button
-          onClick={logout}
-          variant="outline"
-          className="w-full border-[#c4b896] text-[#2d5a3d] hover:bg-[#c4b896]/30 bg-transparent"
-        >
-          Cerrar Sesión
-        </Button>
-      </div>
-    </aside>
-  );
-
   // ── Render tab ejercicios ─────────────────────────────────────────────────
 
   const tabEjercicios = (
@@ -386,7 +395,7 @@ export function EjerciciosPage() {
             <div>
               <label className="text-sm font-medium mb-2 block">Tipo</label>
               <select
-                className="w-full p-2 border rounded-md bg-white"
+                className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                 value={filtroTipo ?? ''}
                 onChange={(e) => { setFiltroTipo(e.target.value || null); setPagEj(1); }}
               >
@@ -399,7 +408,7 @@ export function EjerciciosPage() {
             <div>
               <label className="text-sm font-medium mb-2 block">Categoría</label>
               <select
-                className="w-full p-2 border rounded-md bg-white"
+                className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                 value={filtroCatId ?? ''}
                 onChange={(e) => { setFiltroCatId(e.target.value || null); setPagEj(1); }}
               >
@@ -412,7 +421,7 @@ export function EjerciciosPage() {
             <div>
               <label className="text-sm font-medium mb-2 block">Estado</label>
               <select
-                className="w-full p-2 border rounded-md bg-white"
+                className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                 value={filtroActivoEj === null ? '' : filtroActivoEj.toString()}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -434,16 +443,16 @@ export function EjerciciosPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#f5f0e6]">
+              <thead className="bg-secondary">
                 <tr>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Título</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Tipo</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Subtipo</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Categoría</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">BPM</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Compás</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Estado</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Acciones</th>
+                  <th className="text-left p-4 font-medium text-foreground">Título</th>
+                  <th className="text-left p-4 font-medium text-foreground">Tipo</th>
+                  <th className="text-left p-4 font-medium text-foreground">Subtipo</th>
+                  <th className="text-left p-4 font-medium text-foreground">Categoría</th>
+                  <th className="text-left p-4 font-medium text-foreground">BPM</th>
+                  <th className="text-left p-4 font-medium text-foreground">Compás</th>
+                  <th className="text-left p-4 font-medium text-foreground">Estado</th>
+                  <th className="text-left p-4 font-medium text-foreground">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -454,7 +463,7 @@ export function EjerciciosPage() {
                 ) : (
                   dataEj?.ejercicios.map((ej) => {
                     return (
-                      <tr key={ej.id} className="border-t border-[#e5e4e7] hover:bg-[#f5f0e6]/50">
+                      <tr key={ej.id} className="border-t border-[#e5e4e7] hover:bg-secondary/50">
                         <td className="p-4 font-medium max-w-[200px] truncate">{ej.titulo}</td>
                         <td className="p-4">
                           <span className="px-2 py-1 rounded text-xs bg-[#2d5a3d]/10 text-[#2d5a3d]">
@@ -509,7 +518,7 @@ export function EjerciciosPage() {
             <div className="flex-1">
               <label className="text-sm font-medium mb-2 block">Estado</label>
               <select
-                className="w-full p-2 border rounded-md bg-white"
+                className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                 value={filtroActivoCat.toString()}
                 onChange={(e) => { setFiltroActivoCat(e.target.value === 'true'); setPagCat(1); }}
               >
@@ -525,12 +534,12 @@ export function EjerciciosPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#f5f0e6]">
+              <thead className="bg-secondary">
                 <tr>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Nombre</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Descripción</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Estado</th>
-                  <th className="text-left p-4 font-medium text-[#2d5a3d]">Acciones</th>
+                  <th className="text-left p-4 font-medium text-foreground">Nombre</th>
+                  <th className="text-left p-4 font-medium text-foreground">Descripción</th>
+                  <th className="text-left p-4 font-medium text-foreground">Estado</th>
+                  <th className="text-left p-4 font-medium text-foreground">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -540,7 +549,7 @@ export function EjerciciosPage() {
                   <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No hay categorías</td></tr>
                 ) : (
                   dataCat?.categorias.map((cat) => (
-                    <tr key={cat.id} className="border-t border-[#e5e4e7] hover:bg-[#f5f0e6]/50">
+                    <tr key={cat.id} className="border-t border-[#e5e4e7] hover:bg-secondary/50">
                       <td className="p-4 font-medium">{cat.nombre}</td>
                       <td className="p-4 text-sm max-w-[400px] truncate">{cat.descripcion}</td>
                       <td className="p-4">
@@ -600,7 +609,7 @@ export function EjerciciosPage() {
         <div>
           <label className="text-sm font-medium mb-1 block">Tipo *</label>
           <select
-            className="w-full p-2 border rounded-md"
+            className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
             value={formEj.tipo ?? ''}
             onChange={(e) => setFormEj({ ...formEj, tipo: e.target.value })}
           >
@@ -632,7 +641,7 @@ export function EjerciciosPage() {
       <div>
         <label className="text-sm font-medium mb-1 block">Descripción *</label>
         <textarea
-          className="w-full p-2 border rounded-md text-sm resize-none"
+          className="w-full p-2 border rounded-md text-sm resize-none bg-input-background text-foreground border-border"
           rows={3}
           placeholder="Descripción del ejercicio"
           value={formEj.descripcion ?? ''}
@@ -643,7 +652,7 @@ export function EjerciciosPage() {
       <div>
         <label className="text-sm font-medium mb-1 block">Categoría *</label>
         <select
-          className="w-full p-2 border rounded-md"
+          className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
           value={formEj.categoria_id ?? ''}
           onChange={(e) => setFormEj({ ...formEj, categoria_id: e.target.value })}
         >
@@ -667,7 +676,7 @@ export function EjerciciosPage() {
         <div>
           <label className="text-sm font-medium mb-1 block">Compás</label>
           <select
-            className="w-full p-2 border rounded-md"
+            className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
             value={formEj.compas ?? '4/4'}
             onChange={(e) => setFormEj({ ...formEj, compas: e.target.value })}
           >
@@ -681,7 +690,7 @@ export function EjerciciosPage() {
       <div>
         <label className="text-sm font-medium mb-1 block">Instrucciones</label>
         <textarea
-          className="w-full p-2 border rounded-md text-sm resize-none"
+          className="w-full p-2 border rounded-md text-sm resize-none bg-input-background text-foreground border-border"
           rows={2}
           placeholder="Instrucciones para el estudiante (opcional)"
           value={formEj.instrucciones ?? ''}
@@ -700,12 +709,11 @@ export function EjerciciosPage() {
                 Compás {ci + 1}
               </span>
               {compas.map((nota, ni) => (
-                <Input
+                <SelectorNota
                   key={ni}
-                  placeholder={['Do', 'Re', 'Mi', 'Fa'][ni]}
                   value={nota}
-                  onChange={(e) => updateNota(ci, ni, e.target.value)}
-                  className="text-center text-sm"
+                  onChange={(v) => updateNota(ci, ni, v)}
+                  placeholder={['Do', 'Re', 'Mi', 'Fa'][ni]}
                 />
               ))}
             </div>
@@ -785,7 +793,7 @@ export function EjerciciosPage() {
               <div className="mb-4">
                 <label className="text-sm font-medium mb-1 block">Estado</label>
                 <select
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                   value={formEj.activo?.toString() ?? 'true'}
                   onChange={(e) => setFormEj({ ...formEj, activo: e.target.value === 'true' })}
                 >
@@ -865,7 +873,7 @@ export function EjerciciosPage() {
               <div>
                 <label className="text-sm font-medium mb-1 block">Descripción *</label>
                 <textarea
-                  className="w-full p-2 border rounded-md text-sm resize-none"
+                  className="w-full p-2 border rounded-md text-sm resize-none bg-input-background text-foreground border-border"
                   rows={4}
                   placeholder="Descripción de la categoría"
                   value={formCat.descripcion ?? ''}
@@ -876,7 +884,7 @@ export function EjerciciosPage() {
                 <div>
                   <label className="text-sm font-medium mb-1 block">Estado</label>
                   <select
-                    className="w-full p-2 border rounded-md"
+                    className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                     value={formCat.activo?.toString() ?? 'true'}
                     onChange={(e) => setFormCat({ ...formCat, activo: e.target.value === 'true' })}
                   >
@@ -922,57 +930,53 @@ export function EjerciciosPage() {
   // ── Layout principal ──────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex bg-[#f5f0e6]">
-      {sidebar}
+    <Layout>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-foreground">Gestión de Ejercicios</h1>
+        <Button
+          onClick={() => {
+            if (tab === 'ejercicios') {
+              setFormEj({ bpm_referencia: 60, compas: '4/4' });
+              setModalEj('crear');
+            } else {
+              setFormCat({});
+              setModalCat('crear');
+            }
+          }}
+          className="bg-primary hover:opacity-90 text-primary-foreground"
+        >
+          + {tab === 'ejercicios' ? 'Nuevo Ejercicio' : 'Nueva Categoría'}
+        </Button>
+      </div>
 
-      <main className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-[#2d5a3d]">Gestión de Ejercicios</h1>
-          <Button
-            onClick={() => {
-              if (tab === 'ejercicios') {
-                setFormEj({ bpm_referencia: 60, compas: '4/4' });
-                setModalEj('crear');
-              } else {
-                setFormCat({});
-                setModalCat('crear');
-              }
-            }}
-            className="bg-[#2d5a3d] hover:bg-[#1e3d29] text-[#f5f0e6]"
-          >
-            + {tab === 'ejercicios' ? 'Nuevo Ejercicio' : 'Nueva Categoría'}
-          </Button>
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-card rounded-lg p-1 w-fit shadow-sm border border-border">
+        <button
+          onClick={() => setTab('ejercicios')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === 'ejercicios'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary'
+          }`}
+        >
+          Ejercicios
+        </button>
+        <button
+          onClick={() => setTab('categorias')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === 'categorias'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary'
+          }`}
+        >
+          Categorías
+        </button>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-white rounded-lg p-1 w-fit shadow-sm border border-[#c4b896]/30">
-          <button
-            onClick={() => setTab('ejercicios')}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-              tab === 'ejercicios'
-                ? 'bg-[#2d5a3d] text-[#f5f0e6]'
-                : 'text-[#2d5a3d] hover:bg-[#f5f0e6]'
-            }`}
-          >
-            Ejercicios
-          </button>
-          <button
-            onClick={() => setTab('categorias')}
-            className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-              tab === 'categorias'
-                ? 'bg-[#2d5a3d] text-[#f5f0e6]'
-                : 'text-[#2d5a3d] hover:bg-[#f5f0e6]'
-            }`}
-          >
-            Categorías
-          </button>
-        </div>
-
-        {tab === 'ejercicios' ? tabEjercicios : tabCategorias}
-      </main>
+      {tab === 'ejercicios' ? tabEjercicios : tabCategorias}
 
       {modalEjercicios}
       {modalCategorias}
-    </div>
+    </Layout>
   );
 }

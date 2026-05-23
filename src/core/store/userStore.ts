@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { LoginResponse } from './types';
+import type { Usuario } from '@/features/usuarios/types/usuarios.types';
 
 type UserStore = {
-  user: LoginResponse['user'] | null;
-  setUser: (user: LoginResponse['user']) => void;
+  user: Usuario | null;
+  setUser: (user: Usuario) => void;
   clearUser: () => void;
 };
 
@@ -12,13 +12,9 @@ export const useUserStore = create<UserStore>()(
   persist(
     (set) => ({
       user: null,
-      
       setUser: (userData) => set({ user: userData }),
-      
       clearUser: () => set({ user: null }),
     }),
-    {
-      name: 'user-storage',
-    }
+    { name: 'user-storage' }
   )
 );

@@ -1,0 +1,50 @@
+import { ejerciciosApi } from '@/core/http/ejerciciosApi';
+import type {
+  Categoria,
+  CategoriaListResponse,
+  CrearCategoriaRequest,
+  ActualizarCategoriaRequest,
+} from '@/features/categorias/types/categorias.types';
+
+export const categoriasService = {
+  getAll: async (
+    pagina = 1,
+    limite = 100,
+    solo_activas = true
+  ): Promise<CategoriaListResponse> => {
+    const params = new URLSearchParams({
+      pagina: pagina.toString(),
+      limite: limite.toString(),
+      solo_activas: solo_activas.toString(),
+    });
+    const { data } = await ejerciciosApi.get<CategoriaListResponse>(`/categorias/?${params}`);
+    return data;
+  },
+
+  getById: async (id: string): Promise<Categoria> => {
+    const { data } = await ejerciciosApi.get<Categoria>(`/categorias/${id}`);
+    return data;
+  },
+
+  create: async (datos: CrearCategoriaRequest): Promise<Categoria> => {
+    const { data } = await ejerciciosApi.post<Categoria>('/categorias/', datos);
+    return data;
+  },
+
+  update: async (id: string, datos: ActualizarCategoriaRequest): Promise<Categoria> => {
+    const { data } = await ejerciciosApi.patch<Categoria>(`/categorias/${id}`, datos);
+    return data;
+  },
+
+  remove: async (id: string): Promise<{ mensaje: string }> => {
+    const { data } = await ejerciciosApi.delete<{ mensaje: string }>(`/categorias/${id}`);
+    return data;
+  },
+};
+
+// Alias funcionales para compatibilidad con páginas existentes
+export const getCategorias = categoriasService.getAll;
+export const getCategoria = categoriasService.getById;
+export const crearCategoria = categoriasService.create;
+export const actualizarCategoria = categoriasService.update;
+export const desactivarCategoria = categoriasService.remove;

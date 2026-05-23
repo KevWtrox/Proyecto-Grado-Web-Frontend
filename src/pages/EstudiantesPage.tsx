@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
-import { getUsuarios, actualizarUsuario, eliminarUsuario, crearUsuario } from '@/lib/usuarios';
-import type { ActualizarUsuarioRequest, CrearUsuarioRequest } from '@/lib/types';
-import { logout } from '@/lib/auth';
+import { getUsuarios, actualizarUsuario, eliminarUsuario, crearUsuario } from '@/features/usuarios/services/usuarios.service';
+import type { ActualizarUsuarioRequest, CrearUsuarioRequest } from '@/features/usuarios/types/usuarios.types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { Usuario } from '@/lib/types';
+import type { Usuario } from '@/features/usuarios/types/usuarios.types';
+import { MainLayout as Layout } from '@/layouts/MainLayout';
 
 const MOCK_MODE = false;
 
@@ -30,7 +29,6 @@ const mockUsuarios = {
 type ModalType = 'ver' | 'editar' | 'crear' | 'eliminar' | null;
 
 export function EstudiantesPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   
   const [pagina, setPagina] = useState(1);
@@ -145,50 +143,12 @@ export function EstudiantesPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#f5f0e6]">
-      <aside className="w-64 bg-[#2d5a3d] text-[#f5f0e6] flex flex-col shadow-xl">
-        <div className="p-4 border-b border-[#3d7a52]">
-          <h1 className="text-xl font-bold">AudioLearn</h1>
-          <p className="text-xs text-[#a8c4b0]">Panel Admin</p>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-2">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
-          >
-            Dashboard
-          </button>
-          <button
-            className="w-full text-left px-4 py-2 rounded-lg bg-[#3d7a52] text-[#f5f0e6]"
-          >
-            Lista de Estudiantes
-          </button>
-          <button
-            onClick={() => navigate('/ejercicios')}
-            className="w-full text-left px-4 py-2 rounded-lg text-[#a8c4b0] hover:bg-[#3d7a52]/50 transition-colors"
-          >
-            Gestión de Ejercicios
-          </button>
-        </nav>
-
-        <div className="p-4 border-t border-[#3d7a52]">
-          <Button 
-            onClick={logout} 
-            variant="outline" 
-            className="w-full border-[#c4b896] text-[#2d5a3d] hover:bg-[#c4b896]/30 bg-transparent"
-          >
-            Cerrar Sesión
-          </Button>
-        </div>
-      </aside>
-
-      <main className="flex-1 p-8">
+    <Layout>
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-[#2d5a3d]">Lista de Estudiantes</h1>
+          <h1 className="text-2xl font-bold text-foreground">Lista de Estudiantes</h1>
           <Button 
             onClick={handleCrear}
-            className="bg-[#2d5a3d] hover:bg-[#1e3d29] text-[#f5f0e6]"
+            className="bg-primary hover:opacity-90 text-primary-foreground"
           >
             + Nuevo Usuario
           </Button>
@@ -200,7 +160,7 @@ export function EstudiantesPage() {
               <div className="flex-1">
                 <label className="text-sm font-medium mb-2 block">Rol</label>
                 <select
-                  className="w-full p-2 border rounded-md bg-white"
+                  className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                   value={filtroRol ?? ''}
                   onChange={(e) => {
                     setFiltroRol(e.target.value || null);
@@ -215,7 +175,7 @@ export function EstudiantesPage() {
               <div className="flex-1">
                 <label className="text-sm font-medium mb-2 block">Estado</label>
                 <select
-                  className="w-full p-2 border rounded-md bg-white"
+                  className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
                   value={filtroActivo === null ? '' : filtroActivo.toString()}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -236,16 +196,16 @@ export function EstudiantesPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-[#f5f0e6]">
+                <thead className="bg-secondary">
                   <tr>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Nombre</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Apellido</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Correo</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Rol</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Mención</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Paralelo</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Estado</th>
-                    <th className="text-left p-4 font-medium text-[#2d5a3d]">Acciones</th>
+                    <th className="text-left p-4 font-medium text-foreground">Nombre</th>
+                    <th className="text-left p-4 font-medium text-foreground">Apellido</th>
+                    <th className="text-left p-4 font-medium text-foreground">Correo</th>
+                    <th className="text-left p-4 font-medium text-foreground">Rol</th>
+                    <th className="text-left p-4 font-medium text-foreground">Mención</th>
+                    <th className="text-left p-4 font-medium text-foreground">Paralelo</th>
+                    <th className="text-left p-4 font-medium text-foreground">Estado</th>
+                    <th className="text-left p-4 font-medium text-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -255,13 +215,13 @@ export function EstudiantesPage() {
                     <tr><td colSpan={8} className="p-8 text-center">No hay usuarios</td></tr>
                   ) : (
                     data?.datos.map((usuario) => (
-                      <tr key={usuario.id} className="border-t border-[#e5e4e7] hover:bg-[#f5f0e6]/50">
+                      <tr key={usuario.id} className="border-t border-border hover:bg-secondary/50">
                         <td className="p-4">{usuario.nombre}</td>
                         <td className="p-4">{usuario.apellido}</td>
                         <td className="p-4">{usuario.correo}</td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded text-xs ${
-                            usuario.rol === 'admin' ? 'bg-[#2d5a3d] text-white' : 'bg-[#c4b896] text-[#2d5a3d]'
+                            usuario.rol === 'admin' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
                           }`}>
                             {usuario.rol}
                           </span>
@@ -281,7 +241,7 @@ export function EstudiantesPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleVer(usuario)}
-                              className="border-[#2d5a3d] text-[#2d5a3d]"
+                              className="border-border text-foreground"
                             >
                               Ver
                             </Button>
@@ -289,7 +249,7 @@ export function EstudiantesPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleEditar(usuario)}
-                              className="border-[#2d5a3d] text-[#2d5a3d]"
+                              className="border-border text-foreground"
                             >
                               Editar
                             </Button>
@@ -310,7 +270,7 @@ export function EstudiantesPage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between p-4 border-t border-[#e5e4e7]">
+            <div className="flex items-center justify-between p-4 border-t border-border">
               <span className="text-sm text-muted-foreground">
                 Página {pagina} de {totalPaginas} ({data?.total || 0} usuarios)
               </span>
@@ -319,7 +279,7 @@ export function EstudiantesPage() {
                   variant="outline"
                   disabled={pagina <= 1}
                   onClick={() => setPagina(p => p - 1)}
-                  className="border-[#2d5a3d] text-[#2d5a3d]"
+                  className="border-border text-foreground"
                 >
                   Anterior
                 </Button>
@@ -327,7 +287,7 @@ export function EstudiantesPage() {
                   variant="outline"
                   disabled={pagina >= totalPaginas}
                   onClick={() => setPagina(p => p + 1)}
-                  className="border-[#2d5a3d] text-[#2d5a3d]"
+                  className="border-border text-foreground"
                 >
                   Siguiente
                 </Button>
@@ -340,7 +300,7 @@ export function EstudiantesPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <Card className="w-[500px] max-h-[90vh] overflow-y-auto">
               <CardHeader>
-                <CardTitle className="text-[#2d5a3d]">
+                <CardTitle className="text-foreground">
                   {modal === 'ver' && 'Detalles del Usuario'}
                   {modal === 'editar' && 'Editar Usuario'}
                   {modal === 'crear' && 'Crear Usuario'}
@@ -361,7 +321,7 @@ export function EstudiantesPage() {
                       <div><p className="text-sm text-muted-foreground">Fecha Registro</p><p>{new Date(usuarioSeleccionado.fecha_registro).toLocaleDateString()}</p></div>
                       <div><p className="text-sm text-muted-foreground">Estado</p><span className={`px-2 py-1 rounded text-xs ${usuarioSeleccionado.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{usuarioSeleccionado.activo ? 'Activo' : 'Inactivo'}</span></div>
                     </div>
-                    <Button onClick={() => setModal(null)} className="w-full mt-4 bg-[#2d5a3d] text-[#f5f0e6]">Cerrar</Button>
+                    <Button onClick={() => setModal(null)} className="w-full mt-4 bg-primary text-primary-foreground">Cerrar</Button>
                   </div>
                 )}
 
@@ -385,13 +345,13 @@ export function EstudiantesPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Activo</label>
-                      <select className="w-full p-2 border rounded-md" value={formData.activo?.toString() || 'true'} onChange={(e) => setFormData({...formData, activo: e.target.value === 'true'})}>
+                      <select className="w-full p-2 border rounded-md bg-input-background text-foreground border-border" value={formData.activo?.toString() || 'true'} onChange={(e) => setFormData({...formData, activo: e.target.value === 'true'})}>
                         <option value="true">Activo</option>
                         <option value="false">Inactivo</option>
                       </select>
                     </div>
                     <div className="flex gap-2 pt-2">
-                      <Button onClick={guardarEditar} className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]" disabled={actualizarMutate.isPending}>
+                      <Button onClick={guardarEditar} className="flex-1 bg-primary text-primary-foreground" disabled={actualizarMutate.isPending}>
                         {actualizarMutate.isPending ? 'Guardando...' : 'Guardar'}
                       </Button>
                       <Button onClick={() => setModal(null)} variant="outline" className="flex-1">Cancelar</Button>
@@ -419,7 +379,7 @@ export function EstudiantesPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Rol *</label>
-                      <select className="w-full p-2 border rounded-md" value={formData.rol || ''} onChange={(e) => setFormData({...formData, rol: e.target.value})}>
+                      <select className="w-full p-2 border rounded-md bg-input-background text-foreground border-border" value={formData.rol || ''} onChange={(e) => setFormData({...formData, rol: e.target.value})}>
                         <option value="">Seleccionar rol</option>
                         <option value="admin">Admin</option>
                         <option value="estudiante">Estudiante</option>
@@ -434,7 +394,7 @@ export function EstudiantesPage() {
                       <Input type="number" value={formData.paralelo || ''} onChange={(e) => setFormData({...formData, paralelo: parseInt(e.target.value)})} />
                     </div>
                     <div className="flex gap-2 pt-2">
-                      <Button onClick={guardarCrear} className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]" disabled={crearMutate.isPending}>
+                      <Button onClick={guardarCrear} className="flex-1 bg-primary text-primary-foreground" disabled={crearMutate.isPending}>
                         {crearMutate.isPending ? 'Creando...' : 'Crear'}
                       </Button>
                       <Button onClick={() => setModal(null)} variant="outline" className="flex-1">Cancelar</Button>
@@ -458,7 +418,6 @@ export function EstudiantesPage() {
             </Card>
           </div>
         )}
-      </main>
-    </div>
+    </Layout>
   );
 }
