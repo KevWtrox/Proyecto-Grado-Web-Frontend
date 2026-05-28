@@ -1,4 +1,4 @@
-export const TIPOS_EJERCICIO = ['entonacion', 'ritmo', 'dictado', 'lectura_vista', 'identificacion'] as const;
+export const TIPOS_EJERCICIO = ['solfeo', 'ritmo'] as const;
 export const COMPASES_VALIDOS = ['2/4', '3/4', '4/4', '6/8', '3/8', '12/8'] as const;
 
 export type TipoEjercicio = (typeof TIPOS_EJERCICIO)[number];
@@ -8,6 +8,10 @@ export type Compas = {
   notas: [string, string, string, string];
 };
 
+export type CompasRitmico = {
+  figuras: string[];
+};
+
 export type EjercicioResumen = {
   id: string;
   tipo: string;
@@ -15,6 +19,7 @@ export type EjercicioResumen = {
   titulo: string;
   descripcion: string;
   categoria_id: string;
+  nivel?: number;
   bpm_referencia: number;
   compas: string;
   activo: boolean;
@@ -25,7 +30,7 @@ export type EjercicioResumen = {
 
 export type Ejercicio = EjercicioResumen & {
   instrucciones?: string;
-  compases?: Compas[];
+  compases?: (Compas | CompasRitmico)[];
   partitura_base64?: string;
 };
 
@@ -42,7 +47,8 @@ export type CrearEjercicioRequest = {
   titulo: string;
   descripcion: string;
   categoria_id: string;
-  compases: Compas[];
+  compases: Compas[] | CompasRitmico[];
+  nivel?: number;
   bpm_referencia?: number;
   compas?: string;
   instrucciones?: string;
@@ -54,7 +60,8 @@ export type ActualizarEjercicioRequest = {
   titulo?: string;
   descripcion?: string;
   categoria_id?: string;
-  compases?: Compas[];
+  compases?: Compas[] | CompasRitmico[];
+  nivel?: number;
   bpm_referencia?: number;
   compas?: string;
   instrucciones?: string;

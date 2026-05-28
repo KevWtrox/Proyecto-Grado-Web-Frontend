@@ -13,6 +13,7 @@ import {
   desactivarEjercicio,
 } from '@/features/ejercicios/services/ejercicios.service';
 import {
+  categoriasService,
   getCategorias,
   crearCategoria,
   actualizarCategoria,
@@ -110,17 +111,14 @@ type FormEjercicio = {
   instrucciones?: string;
   activo?: boolean;
 };
-type FormCategoria = { nombre?: string; descripcion?: string; activo?: boolean };
+type FormCategoria = { nombre?: string; descripcion?: string; activo?: boolean; imagen_file?: File | null };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function tipoLabel(tipo: string) {
   const map: Record<string, string> = {
-    entonacion: 'Entonación',
-    ritmo: 'Ritmo',
-    dictado: 'Dictado',
-    lectura_vista: 'Lectura a Vista',
-    identificacion: 'Identificación',
+    solfeo: 'Solfeo',
+    ritmo: 'Rítmica',
   };
   return map[tipo] ?? tipo;
 }
@@ -160,7 +158,7 @@ export function EjerciciosPage() {
 
   function compasesFromDetalle(detalle: Ejercicio): string[][] {
     if (!detalle.compases || detalle.compases.length !== 4) return emptyCompases();
-    return detalle.compases.map(c => [...c.notas] as string[]);
+    return detalle.compases.map(c => ('notas' in c ? [...c.notas] : []));
   }
 
   function buildCompasesPayload(): Compas[] | null {
@@ -176,6 +174,7 @@ export function EjerciciosPage() {
   const [modalCat, setModalCat] = useState<ModalCategoria>(null);
   const [categoriaSel, setCategoriaSel] = useState<Categoria | null>(null);
   const [formCat, setFormCat] = useState<FormCategoria>({});
+  const [imagenPreview, setImagenPreview] = useState<string | null>(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -233,12 +232,20 @@ export function EjerciciosPage() {
 
   const crearCatMut = useMutation({
     mutationFn: (datos: CrearCategoriaRequest) => crearCategoria(datos),
-    onSuccess: () => {
+    onSuccess: async (nuevaCategoria) => {
+      if (formCat.imagen_file) {
+        try {
+          await categoriasService.uploadImagen(nuevaCategoria.id, formCat.imagen_file);
+        } catch {
+          toast.warning('Categoría creada, pero no se pudo subir la imagen');
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['categorias'] });
       queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
       toast.success('Categoría creada correctamente');
       setModalCat(null);
       setFormCat({});
+      setImagenPreview(null);
     },
     onError: () => toast.error('Error al crear categoría'),
   });
@@ -251,6 +258,7 @@ export function EjerciciosPage() {
       queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
       toast.success('Categoría actualizada correctamente');
       setModalCat(null);
+      setImagenPreview(null);
     },
     onError: () => toast.error('Error al actualizar categoría'),
   });
@@ -372,8 +380,16 @@ export function EjerciciosPage() {
     });
   }
 
-  function guardarEditarCategoria() {
+  async function guardarEditarCategoria() {
     if (!categoriaSel) return;
+    if (formCat.imagen_file) {
+      try {
+        await categoriasService.uploadImagen(categoriaSel.id, formCat.imagen_file);
+      } catch {
+        toast.error('Error al subir la imagen');
+        return;
+      }
+    }
     editarCatMut.mutate({
       id: categoriaSel.id,
       datos: {
@@ -530,64 +546,89 @@ export function EjerciciosPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-secondary">
-                <tr>
-                  <th className="text-left p-4 font-medium text-foreground">Nombre</th>
-                  <th className="text-left p-4 font-medium text-foreground">Descripción</th>
-                  <th className="text-left p-4 font-medium text-foreground">Estado</th>
-                  <th className="text-left p-4 font-medium text-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingCat ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Cargando categorías...</td></tr>
-                ) : dataCat?.categorias.length === 0 ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">No hay categorías</td></tr>
-                ) : (
-                  dataCat?.categorias.map((cat) => (
-                    <tr key={cat.id} className="border-t border-[#e5e4e7] hover:bg-secondary/50">
-                      <td className="p-4 font-medium">{cat.nombre}</td>
-                      <td className="p-4 text-sm max-w-[400px] truncate">{cat.descripcion}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs ${cat.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {cat.activo ? 'Activa' : 'Inactiva'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => { setCategoriaSel(cat); setModalCat('ver'); }}
-                            className="border-[#2d5a3d] text-[#2d5a3d]"
-                          >Ver</Button>
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => {
-                              setCategoriaSel(cat);
-                              setFormCat({ nombre: cat.nombre, descripcion: cat.descripcion, activo: cat.activo });
-                              setModalCat('editar');
-                            }}
-                            className="border-[#2d5a3d] text-[#2d5a3d]"
-                          >Editar</Button>
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => { setCategoriaSel(cat); setModalCat('eliminar'); }}
-                            className="border-red-300 text-red-600 hover:bg-red-50"
-                          >Eliminar</Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      {loadingCat ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card animate-pulse">
+              <div className="h-36 bg-secondary rounded-t-xl" />
+              <div className="p-4 space-y-2">
+                <div className="h-4 bg-secondary rounded w-2/3" />
+                <div className="h-3 bg-secondary rounded w-full" />
+                <div className="h-3 bg-secondary rounded w-4/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : dataCat?.categorias.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">No hay categorías</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            {dataCat?.categorias.map((cat) => (
+              <div
+                key={cat.id}
+                className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow"
+              >
+                {/* Imagen */}
+                <div className="h-36 bg-secondary/50 flex items-center justify-center overflow-hidden">
+                  {cat.icono_url ? (
+                    <img
+                      src={cat.icono_url}
+                      alt={cat.nombre}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).parentElement!.classList.add('no-image');
+                      }}
+                    />
+                  ) : (
+                    <span className="text-3xl text-muted-foreground/30 select-none">♪</span>
+                  )}
+                </div>
+
+                {/* Contenido */}
+                <div className="p-4 flex flex-col flex-1 gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-foreground leading-tight">{cat.nombre}</h3>
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-xs ${cat.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {cat.activo ? 'Activa' : 'Inactiva'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-2 flex-1">{cat.descripcion}</p>
+
+                  <p className="text-sm text-foreground font-medium">
+                    <span className="text-base font-bold">{cat.total_ejercicios}</span>
+                    {' '}ejercicio{cat.total_ejercicios !== 1 ? 's' : ''}
+                  </p>
+
+                  {/* Acciones */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => { setCategoriaSel(cat); setModalCat('ver'); }}
+                      className="flex-1 border-[#2d5a3d] text-[#2d5a3d]"
+                    >Ver</Button>
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => {
+                        setCategoriaSel(cat);
+                        setFormCat({ nombre: cat.nombre, descripcion: cat.descripcion, activo: cat.activo });
+                        setModalCat('editar');
+                      }}
+                      className="flex-1 border-[#2d5a3d] text-[#2d5a3d]"
+                    >Editar</Button>
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => { setCategoriaSel(cat); setModalCat('eliminar'); }}
+                      className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                    >Eliminar</Button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="flex items-center justify-between p-4 border-t border-[#e5e4e7]">
+          <div className="flex items-center justify-between mt-4">
             <span className="text-sm text-muted-foreground">
               Página {pagCat} de {totalPagCat} ({dataCat?.total ?? 0} categorías)
             </span>
@@ -596,8 +637,8 @@ export function EjerciciosPage() {
               <Button variant="outline" disabled={pagCat >= totalPagCat} onClick={() => setPagCat(p => p + 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Siguiente</Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 
@@ -608,16 +649,22 @@ export function EjerciciosPage() {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium mb-1 block">Tipo *</label>
-          <select
-            className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
-            value={formEj.tipo ?? ''}
-            onChange={(e) => setFormEj({ ...formEj, tipo: e.target.value })}
-          >
-            <option value="">Seleccionar tipo</option>
-            {TIPOS_EJERCICIO.map((t) => (
-              <option key={t} value={t}>{tipoLabel(t)}</option>
-            ))}
-          </select>
+          {modalEj === 'crear' ? (
+            <div className="w-full p-2 border rounded-md bg-secondary/50 text-foreground border-border text-sm">
+              Solfeo
+            </div>
+          ) : (
+            <select
+              className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
+              value={formEj.tipo ?? ''}
+              onChange={(e) => setFormEj({ ...formEj, tipo: e.target.value })}
+            >
+              <option value="">Seleccionar tipo</option>
+              {TIPOS_EJERCICIO.map((t) => (
+                <option key={t} value={t}>{tipoLabel(t)}</option>
+              ))}
+            </select>
+          )}
         </div>
         <div>
           <label className="text-sm font-medium mb-1 block">Subtipo *</label>
@@ -847,12 +894,23 @@ export function EjerciciosPage() {
         </CardHeader>
         <CardContent>
           {modalCat === 'ver' && categoriaSel && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {categoriaSel.icono_url && (
+                <div className="flex justify-center">
+                  <img
+                    src={categoriaSel.icono_url}
+                    alt={categoriaSel.nombre}
+                    className="max-h-48 rounded-lg object-contain border border-border bg-secondary/30 p-2"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
               <div className="space-y-3 text-sm">
                 <div><p className="text-muted-foreground">Nombre</p><p className="font-medium">{categoriaSel.nombre}</p></div>
                 <div><p className="text-muted-foreground">Descripción</p><p>{categoriaSel.descripcion}</p></div>
                 <div className="flex gap-6">
                   <div><p className="text-muted-foreground">Estado</p><span className={`px-2 py-1 rounded text-xs ${categoriaSel.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{categoriaSel.activo ? 'Activa' : 'Inactiva'}</span></div>
+                  <div><p className="text-muted-foreground">Ejercicios</p><p className="font-semibold text-[#2d5a3d]">{categoriaSel.total_ejercicios}</p></div>
                   <div><p className="text-muted-foreground">Creada</p><p>{new Date(categoriaSel.fecha_creacion).toLocaleDateString()}</p></div>
                 </div>
               </div>
@@ -880,6 +938,49 @@ export function EjerciciosPage() {
                   onChange={(e) => setFormCat({ ...formCat, descripcion: e.target.value })}
                 />
               </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">
+                  Imagen {modalCat === 'editar' && categoriaSel?.icono_url ? '(reemplazar)' : '(opcional)'}
+                </label>
+                {/* Preview de imagen actual en edición */}
+                {modalCat === 'editar' && categoriaSel?.icono_url && !imagenPreview && (
+                  <div className="mb-2">
+                    <img
+                      src={categoriaSel.icono_url}
+                      alt="Imagen actual"
+                      className="h-24 rounded-lg object-contain border border-border bg-secondary/30 p-1"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Imagen actual</p>
+                  </div>
+                )}
+                {/* Preview de nueva imagen seleccionada */}
+                {imagenPreview && (
+                  <div className="mb-2">
+                    <img
+                      src={imagenPreview}
+                      alt="Vista previa"
+                      className="h-24 rounded-lg object-contain border border-[#2d5a3d]/40 bg-secondary/30 p-1"
+                    />
+                    <p className="text-xs text-[#2d5a3d] mt-1">Nueva imagen seleccionada</p>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                  className="w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-[#2d5a3d]/10 file:text-[#2d5a3d] hover:file:bg-[#2d5a3d]/20 cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setFormCat({ ...formCat, imagen_file: file });
+                    if (file) {
+                      setImagenPreview(URL.createObjectURL(file));
+                    } else {
+                      setImagenPreview(null);
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WebP, GIF o SVG. Máx. 5 MB.</p>
+              </div>
               {modalCat === 'editar' && (
                 <div>
                   <label className="text-sm font-medium mb-1 block">Estado</label>
@@ -901,7 +1002,7 @@ export function EjerciciosPage() {
                 >
                   {(crearCatMut.isPending || editarCatMut.isPending) ? 'Guardando...' : (modalCat === 'crear' ? 'Crear' : 'Guardar')}
                 </Button>
-                <Button onClick={() => { setModalCat(null); setFormCat({}); }} variant="outline" className="flex-1">Cancelar</Button>
+                <Button onClick={() => { setModalCat(null); setFormCat({}); setImagenPreview(null); }} variant="outline" className="flex-1">Cancelar</Button>
               </div>
             </div>
           )}
@@ -918,7 +1019,7 @@ export function EjerciciosPage() {
                 >
                   {eliminarCatMut.isPending ? 'Desactivando...' : 'Desactivar'}
                 </Button>
-                <Button onClick={() => setModalCat(null)} variant="outline" className="flex-1">Cancelar</Button>
+                <Button onClick={() => { setModalCat(null); setImagenPreview(null); }} variant="outline" className="flex-1">Cancelar</Button>
               </div>
             </div>
           )}
@@ -936,7 +1037,7 @@ export function EjerciciosPage() {
         <Button
           onClick={() => {
             if (tab === 'ejercicios') {
-              setFormEj({ bpm_referencia: 60, compas: '4/4' });
+              setFormEj({ tipo: 'solfeo', bpm_referencia: 60, compas: '4/4' });
               setModalEj('crear');
             } else {
               setFormCat({});

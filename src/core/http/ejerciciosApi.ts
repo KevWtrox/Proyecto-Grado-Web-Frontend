@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-const EXERCISES_API_URL = import.meta.env.VITE_EXERCISES_BACKEND_URL || 'http://127.0.0.1:8002';
+const GATEWAY_URL = (import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8080').replace(/\/$/, '');
 
 export const ejerciciosApi = axios.create({
-  baseURL: EXERCISES_API_URL,
+  baseURL: `${GATEWAY_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
 });

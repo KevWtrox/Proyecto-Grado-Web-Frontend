@@ -7,6 +7,7 @@ export type Categoria = {
   orden: number;
   activo: boolean;
   fecha_creacion: string;
+  total_ejercicios: number;
 };
 
 export type CategoriaListResponse = {
@@ -19,10 +20,12 @@ export type CategoriaListResponse = {
 export type CrearCategoriaRequest = {
   nombre: string;
   descripcion: string;
+  icono_url?: string;
 };
 
 export type ActualizarCategoriaRequest = {
   nombre?: string;
   descripcion?: string;
   activo?: boolean;
+  icono_url?: string;
 };

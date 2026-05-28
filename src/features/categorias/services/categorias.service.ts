@@ -40,6 +40,17 @@ export const categoriasService = {
     const { data } = await ejerciciosApi.delete<{ mensaje: string }>(`/categorias/${id}`);
     return data;
   },
+
+  uploadImagen: async (id: string, file: File): Promise<Categoria> => {
+    const formData = new FormData();
+    formData.append('imagen', file);
+    const { data } = await ejerciciosApi.post<Categoria>(
+      `/categorias/${id}/imagen`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
 };
 
 // Alias funcionales para compatibilidad con páginas existentes
