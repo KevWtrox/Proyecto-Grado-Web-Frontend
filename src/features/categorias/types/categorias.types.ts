@@ -1,7 +1,10 @@
+export type TipoCategoria = 'solfeo' | 'ritmica';
+
 export type Categoria = {
   id: string;
   nombre: string;
   descripcion: string;
+  tipo: TipoCategoria;
   icono_url?: string;
   color_hex?: string;
   orden: number;
@@ -20,12 +23,14 @@ export type CategoriaListResponse = {
 export type CrearCategoriaRequest = {
   nombre: string;
   descripcion: string;
+  tipo: TipoCategoria;
   icono_url?: string;
 };
 
 export type ActualizarCategoriaRequest = {
   nombre?: string;
   descripcion?: string;
+  tipo?: TipoCategoria;
   activo?: boolean;
   icono_url?: string;
 };

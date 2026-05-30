@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Users, Music, Drum, BookOpen, UserPlus, Brain, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useUserStore } from '@/core/store/userStore';
 import { logout } from '@/features/auth/services/auth.service';
+import { getSolicitudes } from '@/features/usuarios/services/usuarios.service';
+import logoSrc from '@/assets/logo.svg';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -25,20 +28,28 @@ export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const user = useUserStore((s) => s.user);
 
+  // Conteo de solicitudes pendientes — solo admin tiene acceso al endpoint.
+  // Reusa la misma queryKey que SolicitudesPage para compartir caché y refrescar
+  // automáticamente cuando se aprueba/rechaza desde esa página.
+  const { data: solicitudesData } = useQuery({
+    queryKey: ['solicitudes'],
+    queryFn: () => getSolicitudes(1, 100),
+    enabled: user?.rol === 'admin',
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const pendientesCount = solicitudesData?.total ?? 0;
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-background to-[#1a1f1c]">
       <aside className="w-64 bg-sidebar/95 backdrop-blur-sm border-r border-sidebar-border flex flex-col shadow-xl shrink-0">
 
         {/* Header */}
         <div className="p-6 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sidebar-primary to-accent flex items-center justify-center shadow-lg shadow-sidebar-primary/20">
-              <Music className="w-6 h-6 text-sidebar-primary-foreground" />
-            </div>
-            <div>
-              <h2 className="font-bold text-sidebar-foreground tracking-wide">TÓNICA</h2>
-              <p className="text-xs text-muted-foreground">Sistema Admin</p>
-            </div>
+          <div className="flex flex-col items-center gap-1">
+            <img src={logoSrc} alt="Logo TÓNICA" className="max-h-12 max-w-[160px] object-contain" />
+            <h2 className="font-bold text-sidebar-foreground tracking-wide">TÓNICA</h2>
+            <p className="text-xs text-muted-foreground text-center">Sistema de Administración</p>
           </div>
         </div>
 
@@ -48,11 +59,12 @@ export function MainLayout({ children }: MainLayoutProps) {
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
+              const badge = item.path === '/solicitudes' && pendientesCount > 0 ? pendientesCount : null;
               return (
                 <Button
                   key={item.path}
                   variant={isActive ? 'default' : 'ghost'}
-                  className={`w-full h-11 justify-start gap-3 transition-all ${
+                  className={`relative w-full h-11 justify-start gap-3 transition-all ${
                     isActive
                       ? 'bg-gradient-to-r from-sidebar-primary to-accent text-sidebar-primary-foreground hover:from-accent hover:to-sidebar-primary shadow-md shadow-sidebar-primary/20'
                       : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
@@ -61,6 +73,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="text-sm">{item.label}</span>
+                  {badge != null && (
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center shadow-md ring-2 ring-sidebar"
+                      aria-label={`${badge} solicitudes pendientes`}
+                    >
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
                 </Button>
               );
             })}

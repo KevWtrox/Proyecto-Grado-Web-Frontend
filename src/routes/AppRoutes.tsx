@@ -6,6 +6,7 @@ import { EstudiantesPage } from '@/pages/EstudiantesPage';
 import { EjerciciosPage } from '@/pages/EjerciciosPage';
 import { RitmicaPage } from '@/pages/RitmicaPage';
 import { PracticasPage } from '@/pages/PracticasPage';
+import { SolicitudesPage } from '@/pages/SolicitudesPage';
 
 export function AppRoutes() {
   return (
@@ -16,6 +17,7 @@ export function AppRoutes() {
       <Route path="/ejercicios" element={<ProtectedRoute><EjerciciosPage /></ProtectedRoute>} />
       <Route path="/ejercicios/ritmica" element={<ProtectedRoute><RitmicaPage /></ProtectedRoute>} />
       <Route path="/practicas" element={<ProtectedRoute><PracticasPage /></ProtectedRoute>} />
+      <Route path="/solicitudes" element={<ProtectedRoute><SolicitudesPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>
   );

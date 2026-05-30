@@ -1,11 +1,18 @@
+export type EstadoUsuario = 'pendiente' | 'aprobado' | 'rechazado';
+export type Genero = 'M' | 'F';
+
 export type Usuario = {
   id: string;
   nombre: string;
   apellido: string;
   correo: string;
   rol: string;
-  mencion: string;
-  paralelo: number;
+  ci?: string;
+  genero?: Genero;
+  mencion?: string;
+  paralelo?: number;
+  estado: EstadoUsuario;
+  motivo_registro?: string;
   fecha_registro: string;
   activo: boolean;
 };
@@ -23,6 +30,8 @@ export type CrearUsuarioRequest = {
   correo: string;
   contrasena: string;
   rol: string;
+  genero: Genero;
+  ci?: string;
   mencion?: string;
   paralelo?: number;
 };

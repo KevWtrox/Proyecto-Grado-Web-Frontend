@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { MainLayout as Layout } from '@/layouts/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getIntentosPorDiaSemana } from '@/features/dashboard/services/estadisticas.service';
 
 const mockEstudiantes = [
   { id: '1', nombre: 'Kevin Torrez', puntuacion: 95, ejercicios: 24 },
@@ -9,24 +11,27 @@ const mockEstudiantes = [
   { id: '5', nombre: 'Carlos Ruiz', puntuacion: 75, ejercicios: 12 },
 ];
 
-const mockPracticasPorDia = [
-  { dia: 'Lun', cantidad: 12 },
-  { dia: 'Mar', cantidad: 8 },
-  { dia: 'Mié', cantidad: 15 },
-  { dia: 'Jue', cantidad: 6 },
-  { dia: 'Vie', cantidad: 20 },
-  { dia: 'Sáb', cantidad: 3 },
-  { dia: 'Dom', cantidad: 0 },
-];
-
 const mockUltimoEjercicio = {
   nombre: 'Patrón de batería - Rock Básico',
   puntuacion: 85,
   fecha: '27/03/2026',
 };
 
+const DIA_LABEL_CORTO: Record<string, string> = {
+  Lunes: 'Lun', Martes: 'Mar', 'Miércoles': 'Mié', Jueves: 'Jue',
+  Viernes: 'Vie', 'Sábado': 'Sáb', Domingo: 'Dom',
+};
+
 export function DashboardPage() {
-  const maxPractica = Math.max(...mockPracticasPorDia.map(p => p.cantidad));
+  const { data: intentosData, isLoading: loadingIntentos } = useQuery({
+    queryKey: ['estadisticas', 'intentos-por-dia-semana'],
+    queryFn: getIntentosPorDiaSemana,
+    staleTime: 60_000,
+  });
+
+  const dias = intentosData?.dias ?? [];
+  const maxIntentos = dias.length > 0 ? Math.max(...dias.map(d => d.intentos), 1) : 1;
+  const totalIntentos = intentosData?.total ?? 0;
 
   return (
     <Layout>
@@ -68,24 +73,59 @@ export function DashboardPage() {
         <div className="space-y-6">
           <Card className="border-border shadow-lg">
             <CardHeader>
-              <CardTitle className="text-primary">Prácticas por Día de la Semana</CardTitle>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="text-primary">Intentos por Día de la Semana</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Últimos 30 días · solo ejercicios completados
+                  </p>
+                </div>
+                {!loadingIntentos && (
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary shrink-0">
+                    {totalIntentos} {totalIntentos === 1 ? 'intento' : 'intentos'}
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-end justify-between h-40 gap-2">
-                {mockPracticasPorDia.map((practica) => (
-                  <div key={practica.dia} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full rounded-t transition-all"
-                      style={{
-                        background: 'linear-gradient(to top, var(--sidebar-primary), var(--accent))',
-                        height: `${(practica.cantidad / maxPractica) * 100}%`,
-                        minHeight: practica.cantidad > 0 ? '8px' : '2px',
-                      }}
-                    />
-                    <span className="text-xs text-muted-foreground">{practica.dia}</span>
-                  </div>
-                ))}
-              </div>
+              {loadingIntentos ? (
+                <div className="flex items-end justify-between h-40 gap-2 animate-pulse">
+                  {[...Array(7)].map((_, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="w-full bg-secondary rounded-t" style={{ height: `${30 + (i * 10) % 70}%` }} />
+                      <div className="w-8 h-3 bg-secondary rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : totalIntentos === 0 ? (
+                <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">
+                  Sin intentos registrados en este periodo
+                </div>
+              ) : (
+                <div className="flex items-end justify-between h-40 gap-2">
+                  {dias.map((d) => {
+                    const label = DIA_LABEL_CORTO[d.dia_nombre] ?? d.dia_nombre.slice(0, 3);
+                    const heightPct = (d.intentos / maxIntentos) * 100;
+                    return (
+                      <div key={d.dia_num} className="flex-1 flex flex-col items-center gap-2 group relative">
+                        <div className="absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-semibold text-foreground pointer-events-none">
+                          {d.intentos}
+                        </div>
+                        <div
+                          className="w-full rounded-t transition-all"
+                          style={{
+                            background: 'linear-gradient(to top, var(--sidebar-primary), var(--accent))',
+                            height: `${heightPct}%`,
+                            minHeight: d.intentos > 0 ? '8px' : '2px',
+                          }}
+                          title={`${d.dia_nombre}: ${d.intentos}`}
+                        />
+                        <span className="text-xs text-muted-foreground">{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 

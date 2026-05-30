@@ -11,6 +11,18 @@ import { MainLayout as Layout } from '@/layouts/MainLayout';
 
 const MOCK_MODE = false;
 
+const MENCIONES = [
+  'Bajo Eléctrico',
+  'Batería',
+  'Guitarra Acústica',
+  'Guitarra Eléctrica',
+  'Percusión Moderna',
+  'Piano Moderno',
+  'Saxofón Moderno',
+  'Trompeta Moderna',
+  'Canto Moderno',
+] as const;
+
 type FormDataType = Partial<Usuario> & { contrasena?: string };
 
 const mockUsuarios = {
@@ -127,8 +139,8 @@ export function EstudiantesPage() {
   };
 
   const guardarCrear = () => {
-    if (!formData.nombre || !formData.apellido || !formData.correo || !formData.contrasena || !formData.rol) {
-      toast.error('Todos los campos son requeridos');
+    if (!formData.nombre || !formData.apellido || !formData.correo || !formData.contrasena || !formData.rol || !formData.genero) {
+      toast.error('Todos los campos obligatorios deben completarse');
       return;
     }
     crearMutate.mutate({
@@ -137,6 +149,7 @@ export function EstudiantesPage() {
       correo: formData.correo,
       contrasena: formData.contrasena,
       rol: formData.rol,
+      genero: formData.genero,
       mencion: formData.mencion,
       paralelo: formData.paralelo,
     });
@@ -169,6 +182,7 @@ export function EstudiantesPage() {
                 >
                   <option value="">Todos</option>
                   <option value="admin">Admin</option>
+                  <option value="docente">Docente</option>
                   <option value="estudiante">Estudiante</option>
                 </select>
               </div>
@@ -316,6 +330,7 @@ export function EstudiantesPage() {
                       <div><p className="text-sm text-muted-foreground">Apellido</p><p>{usuarioSeleccionado.apellido}</p></div>
                       <div><p className="text-sm text-muted-foreground">Correo</p><p>{usuarioSeleccionado.correo}</p></div>
                       <div><p className="text-sm text-muted-foreground">Rol</p><p>{usuarioSeleccionado.rol}</p></div>
+                      <div><p className="text-sm text-muted-foreground">Género</p><p>{usuarioSeleccionado.genero === 'M' ? 'Masculino' : usuarioSeleccionado.genero === 'F' ? 'Femenino' : '-'}</p></div>
                       <div><p className="text-sm text-muted-foreground">Mención</p><p>{usuarioSeleccionado.mencion || '-'}</p></div>
                       <div><p className="text-sm text-muted-foreground">Paralelo</p><p>{usuarioSeleccionado.paralelo || '-'}</p></div>
                       <div><p className="text-sm text-muted-foreground">Fecha Registro</p><p>{new Date(usuarioSeleccionado.fecha_registro).toLocaleDateString()}</p></div>
@@ -337,7 +352,16 @@ export function EstudiantesPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Mención</label>
-                      <Input value={formData.mencion || ''} onChange={(e) => setFormData({...formData, mencion: e.target.value})} />
+                      <select
+                        className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
+                        value={formData.mencion || ''}
+                        onChange={(e) => setFormData({...formData, mencion: e.target.value || undefined})}
+                      >
+                        <option value="">Sin mención</option>
+                        {MENCIONES.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Paralelo</label>
@@ -377,17 +401,37 @@ export function EstudiantesPage() {
                       <label className="text-sm font-medium mb-1 block">Contraseña *</label>
                       <Input type="password" value={formData.contrasena || ''} onChange={(e) => setFormData({...formData, contrasena: e.target.value})} />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium mb-1 block">Rol *</label>
-                      <select className="w-full p-2 border rounded-md bg-input-background text-foreground border-border" value={formData.rol || ''} onChange={(e) => setFormData({...formData, rol: e.target.value})}>
-                        <option value="">Seleccionar rol</option>
-                        <option value="admin">Admin</option>
-                        <option value="estudiante">Estudiante</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Rol *</label>
+                        <select className="w-full p-2 border rounded-md bg-input-background text-foreground border-border" value={formData.rol || ''} onChange={(e) => setFormData({...formData, rol: e.target.value})}>
+                          <option value="">Seleccionar rol</option>
+                          <option value="admin">Admin</option>
+                          <option value="docente">Docente</option>
+                          <option value="estudiante">Estudiante</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-1 block">Género *</label>
+                        <select className="w-full p-2 border rounded-md bg-input-background text-foreground border-border" value={formData.genero || ''} onChange={(e) => setFormData({...formData, genero: (e.target.value || undefined) as 'M' | 'F' | undefined})}>
+                          <option value="">Seleccionar</option>
+                          <option value="M">Masculino</option>
+                          <option value="F">Femenino</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Mención</label>
-                      <Input value={formData.mencion || ''} onChange={(e) => setFormData({...formData, mencion: e.target.value})} />
+                      <select
+                        className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
+                        value={formData.mencion || ''}
+                        onChange={(e) => setFormData({...formData, mencion: e.target.value || undefined})}
+                      >
+                        <option value="">Sin mención</option>
+                        {MENCIONES.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Paralelo</label>

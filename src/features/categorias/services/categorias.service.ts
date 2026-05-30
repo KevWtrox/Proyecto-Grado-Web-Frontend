@@ -4,19 +4,22 @@ import type {
   CategoriaListResponse,
   CrearCategoriaRequest,
   ActualizarCategoriaRequest,
+  TipoCategoria,
 } from '@/features/categorias/types/categorias.types';
 
 export const categoriasService = {
   getAll: async (
     pagina = 1,
     limite = 100,
-    solo_activas = true
+    solo_activas = true,
+    tipo?: TipoCategoria,
   ): Promise<CategoriaListResponse> => {
     const params = new URLSearchParams({
       pagina: pagina.toString(),
       limite: limite.toString(),
       solo_activas: solo_activas.toString(),
     });
+    if (tipo) params.append('tipo', tipo);
     const { data } = await ejerciciosApi.get<CategoriaListResponse>(`/categorias/?${params}`);
     return data;
   },

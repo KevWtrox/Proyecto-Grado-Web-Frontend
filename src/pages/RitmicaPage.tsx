@@ -6,7 +6,13 @@ import { MainLayout as Layout } from '@/layouts/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ejerciciosService } from '@/features/ejercicios/services/ejercicios.service';
-import { getCategorias } from '@/features/categorias/services/categorias.service';
+import {
+  categoriasService,
+  getCategorias,
+  crearCategoria,
+  actualizarCategoria,
+  desactivarCategoria,
+} from '@/features/categorias/services/categorias.service';
 import type {
   EjercicioResumen,
   Ejercicio,
@@ -14,6 +20,11 @@ import type {
   CrearEjercicioRequest,
   ActualizarEjercicioRequest,
 } from '@/features/ejercicios/types/ejercicios.types';
+import type {
+  Categoria,
+  CrearCategoriaRequest,
+  ActualizarCategoriaRequest,
+} from '@/features/categorias/types/categorias.types';
 import { COMPASES_VALIDOS } from '@/features/ejercicios/types/ejercicios.types';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -161,7 +172,9 @@ function CompasRitmicoBuilder({
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
+type TabActivo = 'ejercicios' | 'categorias';
 type ModalRitmica = 'ver' | 'editar' | 'crear' | 'eliminar' | null;
+type ModalCategoria = 'ver' | 'editar' | 'crear' | 'eliminar' | null;
 type FormRitmica = {
   subtipo?: string;
   titulo?: string;
@@ -173,11 +186,14 @@ type FormRitmica = {
   instrucciones?: string;
   activo?: boolean;
 };
+type FormCategoria = { nombre?: string; descripcion?: string; activo?: boolean; imagen_file?: File | null };
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export function RitmicaPage() {
   const queryClient = useQueryClient();
+
+  const [tab, setTab] = useState<TabActivo>('ejercicios');
 
   const [pagina, setPagina] = useState(1);
   const [filtroCatId, setFiltroCatId] = useState<string | null>(null);
@@ -194,6 +210,15 @@ export function RitmicaPage() {
   const emptyCompases = (): string[][] => [[], [], [], []];
   const [compasesForm, setCompasesForm] = useState<string[][]>(emptyCompases());
 
+  // ── Estado categorías ─────────────────────────────────────────────────────
+
+  const [pagCat, setPagCat] = useState(1);
+  const [filtroActivoCat, setFiltroActivoCat] = useState<boolean>(true);
+  const [modalCat, setModalCat] = useState<ModalCategoria>(null);
+  const [categoriaSel, setCategoriaSel] = useState<Categoria | null>(null);
+  const [formCat, setFormCat] = useState<FormCategoria>({});
+  const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+
   // ── Queries ───────────────────────────────────────────────────────────────
 
   const { data, isLoading } = useQuery({
@@ -201,9 +226,14 @@ export function RitmicaPage() {
     queryFn: () => ejerciciosService.getAll(pagina, 20, 'ritmo', filtroCatId, filtroActivo, filtroNivel),
   });
 
+  const { data: dataCat, isLoading: loadingCat } = useQuery({
+    queryKey: ['categorias', 'ritmica', pagCat, filtroActivoCat],
+    queryFn: () => getCategorias(pagCat, 20, filtroActivoCat, 'ritmica'),
+  });
+
   const { data: todasCategorias } = useQuery({
-    queryKey: ['categorias-todas'],
-    queryFn: () => getCategorias(1, 100, false),
+    queryKey: ['categorias-todas', 'ritmica'],
+    queryFn: () => getCategorias(1, 100, false, 'ritmica'),
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -240,13 +270,92 @@ export function RitmicaPage() {
     onError: () => toast.error('Error al desactivar ejercicio'),
   });
 
+  // ── Mutations categorías ──────────────────────────────────────────────────
+
+  const crearCatMut = useMutation({
+    mutationFn: (datos: CrearCategoriaRequest) => crearCategoria(datos),
+    onSuccess: async (nuevaCategoria) => {
+      if (formCat.imagen_file) {
+        try {
+          await categoriasService.uploadImagen(nuevaCategoria.id, formCat.imagen_file);
+        } catch {
+          toast.warning('Categoría creada, pero no se pudo subir la imagen');
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría creada correctamente');
+      setModalCat(null);
+      setFormCat({});
+      setImagenPreview(null);
+    },
+    onError: () => toast.error('Error al crear categoría'),
+  });
+
+  const editarCatMut = useMutation({
+    mutationFn: ({ id, datos }: { id: string; datos: ActualizarCategoriaRequest }) =>
+      actualizarCategoria(id, datos),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría actualizada correctamente');
+      setModalCat(null);
+      setImagenPreview(null);
+    },
+    onError: () => toast.error('Error al actualizar categoría'),
+  });
+
+  const eliminarCatMut = useMutation({
+    mutationFn: (id: string) => desactivarCategoria(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categorias'] });
+      queryClient.invalidateQueries({ queryKey: ['categorias-todas'] });
+      toast.success('Categoría desactivada correctamente');
+      setModalCat(null);
+    },
+    onError: () => toast.error('Error al desactivar categoría'),
+  });
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   const compasStr = form.compas ?? '4/4';
   const required = numeradorCompas(compasStr);
   const totalPag = data ? Math.ceil(data.total / 20) : 1;
+  const totalPagCat = dataCat ? Math.ceil(dataCat.total / 20) : 1;
   const nombreCategoria = (id: string) =>
     todasCategorias?.categorias.find(c => c.id === id)?.nombre ?? id;
+
+  function guardarCrearCategoria() {
+    if (!formCat.nombre || !formCat.descripcion) {
+      toast.error('Nombre y descripción son obligatorios');
+      return;
+    }
+    crearCatMut.mutate({
+      nombre: formCat.nombre!,
+      descripcion: formCat.descripcion!,
+      tipo: 'ritmica',
+    });
+  }
+
+  async function guardarEditarCategoria() {
+    if (!categoriaSel) return;
+    if (formCat.imagen_file) {
+      try {
+        await categoriasService.uploadImagen(categoriaSel.id, formCat.imagen_file);
+      } catch {
+        toast.error('Error al subir la imagen');
+        return;
+      }
+    }
+    editarCatMut.mutate({
+      id: categoriaSel.id,
+      datos: {
+        nombre: formCat.nombre,
+        descripcion: formCat.descripcion,
+        activo: formCat.activo,
+      },
+    });
+  }
 
   function resetForm() {
     setForm({ nivel: 1, bpm_referencia: 60, compas: '4/4' });
@@ -474,15 +583,51 @@ export function RitmicaPage() {
   return (
     <Layout>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Ejercicios de Rítmica</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {tab === 'ejercicios' ? 'Ejercicios de Rítmica' : 'Categorías de Rítmica'}
+        </h1>
         <Button
-          onClick={() => { resetForm(); setModal('crear'); }}
+          onClick={() => {
+            if (tab === 'ejercicios') {
+              resetForm();
+              setModal('crear');
+            } else {
+              setFormCat({});
+              setModalCat('crear');
+            }
+          }}
           className="bg-primary hover:opacity-90 text-primary-foreground"
         >
-          + Nuevo Ejercicio
+          + {tab === 'ejercicios' ? 'Nuevo Ejercicio' : 'Nueva Categoría'}
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-card rounded-lg p-1 w-fit shadow-sm border border-border">
+        <button
+          onClick={() => setTab('ejercicios')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === 'ejercicios'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary'
+          }`}
+        >
+          Ejercicios
+        </button>
+        <button
+          onClick={() => setTab('categorias')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === 'categorias'
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-secondary'
+          }`}
+        >
+          Categorías
+        </button>
+      </div>
+
+      {tab === 'ejercicios' && (
+      <>
       {/* Filtros */}
       <Card className="border-0 shadow-lg mb-6">
         <CardContent className="pt-6">
@@ -598,6 +743,120 @@ export function RitmicaPage() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
+
+      {tab === 'categorias' && (
+      <div>
+        <Card className="border-0 shadow-lg mb-6">
+          <CardContent className="pt-6">
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <label className="text-sm font-medium mb-2 block">Estado</label>
+                <select
+                  className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
+                  value={filtroActivoCat.toString()}
+                  onChange={(e) => { setFiltroActivoCat(e.target.value === 'true'); setPagCat(1); }}
+                >
+                  <option value="true">Solo activas</option>
+                  <option value="false">Todas</option>
+                </select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {loadingCat ? (
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-border bg-card animate-pulse">
+                <div className="h-36 bg-secondary rounded-t-xl" />
+                <div className="p-4 space-y-2">
+                  <div className="h-4 bg-secondary rounded w-2/3" />
+                  <div className="h-3 bg-secondary rounded w-full" />
+                  <div className="h-3 bg-secondary rounded w-4/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : dataCat?.categorias.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">No hay categorías de rítmica</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-4">
+              {dataCat?.categorias.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="rounded-xl border border-border bg-card shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow"
+                >
+                  <div className="h-36 bg-secondary/50 flex items-center justify-center overflow-hidden">
+                    {cat.icono_url ? (
+                      <img
+                        src={cat.icono_url}
+                        alt={cat.nombre}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span className="text-3xl text-muted-foreground/30 select-none">♪</span>
+                    )}
+                  </div>
+
+                  <div className="p-4 flex flex-col flex-1 gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-foreground leading-tight">{cat.nombre}</h3>
+                      <span className={`shrink-0 px-2 py-0.5 rounded text-xs ${cat.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {cat.activo ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2 flex-1">{cat.descripcion}</p>
+
+                    <p className="text-sm text-foreground font-medium">
+                      <span className="text-base font-bold">{cat.total_ejercicios}</span>
+                      {' '}ejercicio{cat.total_ejercicios !== 1 ? 's' : ''}
+                    </p>
+
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => { setCategoriaSel(cat); setModalCat('ver'); }}
+                        className="flex-1 border-[#2d5a3d] text-[#2d5a3d]"
+                      >Ver</Button>
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => {
+                          setCategoriaSel(cat);
+                          setFormCat({ nombre: cat.nombre, descripcion: cat.descripcion, activo: cat.activo });
+                          setModalCat('editar');
+                        }}
+                        className="flex-1 border-[#2d5a3d] text-[#2d5a3d]"
+                      >Editar</Button>
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => { setCategoriaSel(cat); setModalCat('eliminar'); }}
+                        className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                      >Eliminar</Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-muted-foreground">
+                Página {pagCat} de {totalPagCat} ({dataCat?.total ?? 0} categorías)
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={pagCat <= 1} onClick={() => setPagCat(p => p - 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Anterior</Button>
+                <Button variant="outline" disabled={pagCat >= totalPagCat} onClick={() => setPagCat(p => p + 1)} className="border-[#2d5a3d] text-[#2d5a3d]">Siguiente</Button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      )}
 
       {/* Modales */}
       {modal && (
@@ -739,6 +998,154 @@ export function RitmicaPage() {
                       {eliminarMut.isPending ? 'Desactivando...' : 'Desactivar'}
                     </Button>
                     <Button onClick={() => setModal(null)} variant="outline" className="flex-1">Cancelar</Button>
+                  </div>
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal categorías */}
+      {modalCat && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <CardTitle className="text-[#2d5a3d]">
+                {modalCat === 'ver' && 'Detalle de Categoría'}
+                {modalCat === 'editar' && 'Editar Categoría'}
+                {modalCat === 'crear' && 'Crear Categoría de Rítmica'}
+                {modalCat === 'eliminar' && 'Desactivar Categoría'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+
+              {modalCat === 'ver' && categoriaSel && (
+                <div className="space-y-4">
+                  {categoriaSel.icono_url && (
+                    <div className="flex justify-center">
+                      <img
+                        src={categoriaSel.icono_url}
+                        alt={categoriaSel.nombre}
+                        className="max-h-48 rounded-lg object-contain border border-border bg-secondary/30 p-2"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-3 text-sm">
+                    <div><p className="text-muted-foreground">Nombre</p><p className="font-medium">{categoriaSel.nombre}</p></div>
+                    <div><p className="text-muted-foreground">Descripción</p><p>{categoriaSel.descripcion}</p></div>
+                    <div className="flex gap-6">
+                      <div><p className="text-muted-foreground">Estado</p><span className={`px-2 py-1 rounded text-xs ${categoriaSel.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{categoriaSel.activo ? 'Activa' : 'Inactiva'}</span></div>
+                      <div><p className="text-muted-foreground">Ejercicios</p><p className="font-semibold text-[#2d5a3d]">{categoriaSel.total_ejercicios}</p></div>
+                      <div><p className="text-muted-foreground">Creada</p><p>{new Date(categoriaSel.fecha_creacion).toLocaleDateString()}</p></div>
+                    </div>
+                  </div>
+                  <Button onClick={() => setModalCat(null)} className="w-full bg-[#2d5a3d] text-[#f5f0e6]">Cerrar</Button>
+                </div>
+              )}
+
+              {(modalCat === 'crear' || modalCat === 'editar') && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Nombre *</label>
+                    <Input
+                      placeholder="Nombre de la categoría"
+                      value={formCat.nombre ?? ''}
+                      onChange={(e) => setFormCat({ ...formCat, nombre: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Descripción *</label>
+                    <textarea
+                      className="w-full p-2 border rounded-md text-sm resize-none bg-input-background text-foreground border-border"
+                      rows={4}
+                      placeholder="Descripción de la categoría"
+                      value={formCat.descripcion ?? ''}
+                      onChange={(e) => setFormCat({ ...formCat, descripcion: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">
+                      Imagen {modalCat === 'editar' && categoriaSel?.icono_url ? '(reemplazar)' : '(opcional)'}
+                    </label>
+                    {modalCat === 'editar' && categoriaSel?.icono_url && !imagenPreview && (
+                      <div className="mb-2">
+                        <img
+                          src={categoriaSel.icono_url}
+                          alt="Imagen actual"
+                          className="h-24 rounded-lg object-contain border border-border bg-secondary/30 p-1"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Imagen actual</p>
+                      </div>
+                    )}
+                    {imagenPreview && (
+                      <div className="mb-2">
+                        <img
+                          src={imagenPreview}
+                          alt="Vista previa"
+                          className="h-24 rounded-lg object-contain border border-[#2d5a3d]/40 bg-secondary/30 p-1"
+                        />
+                        <p className="text-xs text-[#2d5a3d] mt-1">Nueva imagen seleccionada</p>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                      className="w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-[#2d5a3d]/10 file:text-[#2d5a3d] hover:file:bg-[#2d5a3d]/20 cursor-pointer"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        setFormCat({ ...formCat, imagen_file: file });
+                        if (file) {
+                          setImagenPreview(URL.createObjectURL(file));
+                        } else {
+                          setImagenPreview(null);
+                        }
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WebP, GIF o SVG. Máx. 2 MB.</p>
+                  </div>
+                  {modalCat === 'editar' && (
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Estado</label>
+                      <select
+                        className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
+                        value={formCat.activo?.toString() ?? 'true'}
+                        onChange={(e) => setFormCat({ ...formCat, activo: e.target.value === 'true' })}
+                      >
+                        <option value="true">Activa</option>
+                        <option value="false">Inactiva</option>
+                      </select>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={modalCat === 'crear' ? guardarCrearCategoria : guardarEditarCategoria}
+                      className="flex-1 bg-[#2d5a3d] text-[#f5f0e6]"
+                      disabled={crearCatMut.isPending || editarCatMut.isPending}
+                    >
+                      {(crearCatMut.isPending || editarCatMut.isPending) ? 'Guardando...' : (modalCat === 'crear' ? 'Crear' : 'Guardar')}
+                    </Button>
+                    <Button onClick={() => { setModalCat(null); setFormCat({}); setImagenPreview(null); }} variant="outline" className="flex-1">Cancelar</Button>
+                  </div>
+                </div>
+              )}
+
+              {modalCat === 'eliminar' && categoriaSel && (
+                <div className="text-center">
+                  <p className="mb-2">¿Desactivar la categoría <strong>"{categoriaSel.nombre}"</strong>?</p>
+                  <p className="text-sm text-muted-foreground mb-4">Los ejercicios asociados no serán eliminados.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => eliminarCatMut.mutate(categoriaSel.id)}
+                      className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                      disabled={eliminarCatMut.isPending}
+                    >
+                      {eliminarCatMut.isPending ? 'Desactivando...' : 'Desactivar'}
+                    </Button>
+                    <Button onClick={() => { setModalCat(null); setImagenPreview(null); }} variant="outline" className="flex-1">Cancelar</Button>
                   </div>
                 </div>
               )}

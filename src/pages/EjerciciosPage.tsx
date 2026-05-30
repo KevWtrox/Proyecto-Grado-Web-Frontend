@@ -31,7 +31,7 @@ import type {
   CrearCategoriaRequest,
   ActualizarCategoriaRequest,
 } from '@/features/categorias/types/categorias.types';
-import { TIPOS_EJERCICIO, COMPASES_VALIDOS } from '@/features/ejercicios/types/ejercicios.types';
+import { COMPASES_VALIDOS } from '@/features/ejercicios/types/ejercicios.types';
 
 // ── Selector de nota (dropdown + escritura libre) ────────────────────────────
 
@@ -117,8 +117,12 @@ type FormCategoria = { nombre?: string; descripcion?: string; activo?: boolean; 
 
 function tipoLabel(tipo: string) {
   const map: Record<string, string> = {
-    solfeo: 'Solfeo',
+    entonacion: 'Entonación',
     ritmo: 'Rítmica',
+    dictado: 'Dictado',
+    lectura_vista: 'Lectura a vista',
+    identificacion: 'Identificación',
+    solfeo: 'Solfeo',
   };
   return map[tipo] ?? tipo;
 }
@@ -133,7 +137,9 @@ export function EjerciciosPage() {
   // ── Estado ejercicios ─────────────────────────────────────────────────────
 
   const [pagEj, setPagEj] = useState(1);
-  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  // Esta página gestiona solo ejercicios de solfeo. El backend interpreta
+  // tipo="solfeo" como "todo lo no rítmico" (entonacion, dictado, lectura_vista, identificacion).
+  const filtroTipo = 'solfeo';
   const [filtroCatId, setFiltroCatId] = useState<string | null>(null);
   const [filtroActivoEj, setFiltroActivoEj] = useState<boolean | null>(true);
 
@@ -184,13 +190,13 @@ export function EjerciciosPage() {
   });
 
   const { data: dataCat, isLoading: loadingCat } = useQuery({
-    queryKey: ['categorias', pagCat, filtroActivoCat],
-    queryFn: () => getCategorias(pagCat, 20, filtroActivoCat),
+    queryKey: ['categorias', 'solfeo', pagCat, filtroActivoCat],
+    queryFn: () => getCategorias(pagCat, 20, filtroActivoCat, 'solfeo'),
   });
 
   const { data: todasCategorias } = useQuery({
-    queryKey: ['categorias-todas'],
-    queryFn: () => getCategorias(1, 100, false),
+    queryKey: ['categorias-todas', 'solfeo'],
+    queryFn: () => getCategorias(1, 100, false, 'solfeo'),
   });
 
   // ── Mutations ejercicios ──────────────────────────────────────────────────
@@ -377,6 +383,7 @@ export function EjerciciosPage() {
     crearCatMut.mutate({
       nombre: formCat.nombre!,
       descripcion: formCat.descripcion!,
+      tipo: 'solfeo',
     });
   }
 
@@ -407,20 +414,7 @@ export function EjerciciosPage() {
       {/* Filtros */}
       <Card className="border-0 shadow-lg mb-6">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Tipo</label>
-              <select
-                className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
-                value={filtroTipo ?? ''}
-                onChange={(e) => { setFiltroTipo(e.target.value || null); setPagEj(1); }}
-              >
-                <option value="">Todos</option>
-                {TIPOS_EJERCICIO.map((t) => (
-                  <option key={t} value={t}>{tipoLabel(t)}</option>
-                ))}
-              </select>
-            </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Categoría</label>
               <select
@@ -649,22 +643,9 @@ export function EjerciciosPage() {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium mb-1 block">Tipo *</label>
-          {modalEj === 'crear' ? (
-            <div className="w-full p-2 border rounded-md bg-secondary/50 text-foreground border-border text-sm">
-              Solfeo
-            </div>
-          ) : (
-            <select
-              className="w-full p-2 border rounded-md bg-input-background text-foreground border-border"
-              value={formEj.tipo ?? ''}
-              onChange={(e) => setFormEj({ ...formEj, tipo: e.target.value })}
-            >
-              <option value="">Seleccionar tipo</option>
-              {TIPOS_EJERCICIO.map((t) => (
-                <option key={t} value={t}>{tipoLabel(t)}</option>
-              ))}
-            </select>
-          )}
+          <div className="w-full p-2 border rounded-md bg-secondary/50 text-foreground border-border text-sm">
+            {tipoLabel(formEj.tipo ?? 'entonacion')}
+          </div>
         </div>
         <div>
           <label className="text-sm font-medium mb-1 block">Subtipo *</label>
@@ -1037,7 +1018,7 @@ export function EjerciciosPage() {
         <Button
           onClick={() => {
             if (tab === 'ejercicios') {
-              setFormEj({ tipo: 'solfeo', bpm_referencia: 60, compas: '4/4' });
+              setFormEj({ tipo: 'entonacion', bpm_referencia: 60, compas: '4/4' });
               setModalEj('crear');
             } else {
               setFormCat({});

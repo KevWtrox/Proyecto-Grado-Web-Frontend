@@ -17,6 +17,7 @@ const mockUser: LoginResponse = {
     rol: 'admin',
     mencion: 'Bateria Moderna',
     paralelo: 1,
+    estado: 'aprobado',
     fecha_registro: '2026-03-27T18:23:38.407000',
     activo: true,
   },

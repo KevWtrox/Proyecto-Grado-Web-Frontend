@@ -10,6 +10,7 @@ import { useUserStore } from '@/core/store/userStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Lock } from 'lucide-react';
+import logoSrc from '@/assets/logo.svg';
 
 const loginSchema = z.object({
   correo: z.email('Ingresa un correo válido'),
@@ -86,11 +87,7 @@ export function LoginPage() {
 
           {/* Logo + título */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-md" style={{ background: '#232e28' }}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" style={{ color: '#D4A574' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-              </svg>
-            </div>
+            <img src={logoSrc} alt="Logo TÓNICA" className="max-h-20 max-w-[180px] object-contain mb-4" />
             <p className="text-xs font-medium uppercase tracking-widest" style={{ color: '#C5C5BD' }}>
               Sistema de Administración
             </p>
