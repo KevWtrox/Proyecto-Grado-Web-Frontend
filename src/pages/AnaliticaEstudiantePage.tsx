@@ -5,7 +5,6 @@ import { useState } from 'react';
 
 import { MainLayout as Layout } from '@/layouts/MainLayout';
 import { analiticaService } from '@/features/analitica/services/analitica.service';
-import { MatrizConfusion } from '@/features/analitica/components/MatrizConfusion';
 import { MetricasGlobalesCNN } from '@/features/analitica/components/MetricasGlobalesCNN';
 import { ParesConfundidos } from '@/features/analitica/components/ParesConfundidos';
 import { CurvaAprendizaje } from '@/features/analitica/components/CurvaAprendizaje';
@@ -35,11 +34,6 @@ export function AnaliticaEstudiantePage() {
   const ejerciciosQuery = useQuery({
     queryKey: ['analitica', 'estudiante', id, 'ejercicios'],
     queryFn: () => analiticaService.getEjerciciosEstudiante(id!),
-    enabled: !!id,
-  });
-  const matrizQuery = useQuery({
-    queryKey: ['analitica', 'estudiante', id, 'matriz'],
-    queryFn: () => analiticaService.getMatrizConfusion(id!),
     enabled: !!id,
   });
   const metricasQuery = useQuery({
@@ -78,10 +72,7 @@ export function AnaliticaEstudiantePage() {
 
         {metricasQuery.data && <MetricasGlobalesCNN metricas={metricasQuery.data} />}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {matrizQuery.data && <MatrizConfusion data={matrizQuery.data} />}
-          {metricasQuery.data && <ParesConfundidos pares={metricasQuery.data.pares_mas_confundidos} />}
-        </div>
+        {metricasQuery.data && <ParesConfundidos pares={metricasQuery.data.pares_mas_confundidos} />}
 
         {curvaQuery.data && <CurvaAprendizaje data={curvaQuery.data} />}
 

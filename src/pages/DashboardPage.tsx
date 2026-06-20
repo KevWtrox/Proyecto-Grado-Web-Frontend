@@ -1,28 +1,72 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Trophy } from 'lucide-react';
 import { MainLayout as Layout } from '@/layouts/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getIntentosPorDiaSemana } from '@/features/dashboard/services/estadisticas.service';
-
-const mockEstudiantes = [
-  { id: '1', nombre: 'Kevin Torrez', puntuacion: 95, ejercicios: 24 },
-  { id: '2', nombre: 'Maria Garcia', puntuacion: 88, ejercicios: 20 },
-  { id: '3', nombre: 'Juan Perez', puntuacion: 82, ejercicios: 18 },
-  { id: '4', nombre: 'Ana Lopez', puntuacion: 78, ejercicios: 15 },
-  { id: '5', nombre: 'Carlos Ruiz', puntuacion: 75, ejercicios: 12 },
-];
-
-const mockUltimoEjercicio = {
-  nombre: 'Patrón de batería - Rock Básico',
-  puntuacion: 85,
-  fecha: '27/03/2026',
-};
+import { estadisticasService, getIntentosPorDiaSemana } from '@/features/dashboard/services/estadisticas.service';
+import { usuariosService } from '@/features/usuarios/services/usuarios.service';
+import { useUserStore } from '@/core/store/userStore';
+import type { IntentoReciente, RankingItem } from '@/features/dashboard/types/estadisticas.types';
 
 const DIA_LABEL_CORTO: Record<string, string> = {
   Lunes: 'Lun', Martes: 'Mar', 'Miércoles': 'Mié', Jueves: 'Jue',
   Viernes: 'Vie', 'Sábado': 'Sáb', Domingo: 'Dom',
 };
 
+const TIPO_LABEL: Record<string, string> = {
+  entonacion: 'Entonación',
+  ritmo: 'Ritmo',
+  dictado: 'Dictado',
+  lectura_vista: 'Lectura a Vista',
+  identificacion: 'Identificación',
+};
+
+const PARALELOS_OPCIONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+function formatFechaCorta(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function DashboardPage() {
+  const user = useUserStore(s => s.user);
+  const [paralelo, setParalelo] = useState<number>(user?.paralelo ?? 1);
+
+  // Ranking del paralelo seleccionado
+  const rankingQuery = useQuery({
+    queryKey: ['dashboard', 'ranking', paralelo],
+    queryFn: () => estadisticasService.getRanking(paralelo, 10),
+    staleTime: 30_000,
+  });
+
+  // Último intento registrado (limite=1)
+  const recientesQuery = useQuery({
+    queryKey: ['dashboard', 'recientes', 1],
+    queryFn: () => estadisticasService.getIntentosRecientes(1),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const ultimoIntento: IntentoReciente | undefined = recientesQuery.data?.[0];
+
+  // Datos del estudiante del último intento (para mostrar nombre)
+  const estudianteUltimoQuery = useQuery({
+    queryKey: ['usuario', ultimoIntento?.estudiante_id],
+    queryFn: () => usuariosService.getById(ultimoIntento!.estudiante_id!),
+    enabled: !!ultimoIntento?.estudiante_id,
+    staleTime: 5 * 60_000,
+  });
+
+  // Gráfico por día
   const { data: intentosData, isLoading: loadingIntentos } = useQuery({
     queryKey: ['estadisticas', 'intentos-por-dia-semana'],
     queryFn: getIntentosPorDiaSemana,
@@ -38,38 +82,38 @@ export function DashboardPage() {
       <h1 className="text-2xl font-bold text-foreground mb-6">Dashboard</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Ranking */}
         <Card className="border-border shadow-lg">
           <CardHeader>
-            <CardTitle className="text-primary">Ranking de Estudiantes</CardTitle>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-[#d4a84b]" />
+                <CardTitle className="text-primary">Ranking de Estudiantes</CardTitle>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <label className="text-muted-foreground">Paralelo:</label>
+                <select
+                  value={paralelo}
+                  onChange={(e) => setParalelo(Number(e.target.value))}
+                  className="px-2 py-1 border rounded-md bg-input-background text-foreground border-border"
+                >
+                  {PARALELOS_OPCIONES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {mockEstudiantes.map((estudiante, index) => (
-                <div
-                  key={estudiante.id}
-                  className="flex items-center justify-between p-3 bg-secondary rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                      index === 0 ? 'bg-[#d4a84b] text-white' :
-                      index === 1 ? 'bg-[#a8a8a8] text-white' :
-                      index === 2 ? 'bg-[#cd7f32] text-white' :
-                      'bg-muted text-foreground'
-                    }`}>
-                      {index + 1}
-                    </span>
-                    <span className="font-medium text-foreground">{estudiante.nombre}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-bold text-primary">{estudiante.puntuacion}pts</span>
-                    <span className="text-sm text-muted-foreground ml-2">({estudiante.ejercicios} ejer.)</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <RankingList
+              data={rankingQuery.data ?? []}
+              loading={rankingQuery.isLoading}
+              error={rankingQuery.isError ? rankingQuery.error : null}
+            />
           </CardContent>
         </Card>
 
+        {/* Columna derecha: chart por día + último intento */}
         <div className="space-y-6">
           <Card className="border-border shadow-lg">
             <CardHeader>
@@ -134,25 +178,151 @@ export function DashboardPage() {
               <CardTitle className="text-primary">Último Ejercicio Realizado</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-4">
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  {mockUltimoEjercicio.nombre}
-                </h3>
-                <div className="flex items-center justify-center gap-6 text-muted-foreground">
-                  <div>
-                    <p className="text-3xl font-bold text-primary">{mockUltimoEjercicio.puntuacion}</p>
-                    <p className="text-sm">puntos</p>
-                  </div>
-                  <div className="border-l border-border pl-6">
-                    <p className="text-lg text-foreground">{mockUltimoEjercicio.fecha}</p>
-                    <p className="text-sm">fecha</p>
-                  </div>
-                </div>
-              </div>
+              {recientesQuery.isLoading ? (
+                <UltimoIntentoSkeleton />
+              ) : !ultimoIntento ? (
+                <p className="text-center py-6 text-sm text-muted-foreground italic">
+                  Aún no hay intentos registrados.
+                </p>
+              ) : (
+                <UltimoIntentoContenido
+                  intento={ultimoIntento}
+                  estudianteNombre={
+                    estudianteUltimoQuery.data
+                      ? `${estudianteUltimoQuery.data.nombre} ${estudianteUltimoQuery.data.apellido}`
+                      : null
+                  }
+                />
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
     </Layout>
+  );
+}
+
+// ── Sub-componentes ──────────────────────────────────────────────────────────
+
+function RankingList({
+  data,
+  loading,
+  error,
+}: {
+  data: RankingItem[];
+  loading: boolean;
+  error: unknown;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-12 bg-secondary rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-red-500 py-4 text-center">
+        No se pudo cargar el ranking. Verificá si el paralelo tiene estudiantes.
+      </p>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4 text-center italic">
+        No hay estudiantes en este paralelo todavía.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {data.map(item => (
+        <div
+          key={item.usuario_id}
+          className="flex items-center justify-between p-3 bg-secondary rounded-lg"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
+              item.posicion === 1 ? 'bg-[#d4a84b] text-white' :
+              item.posicion === 2 ? 'bg-[#a8a8a8] text-white' :
+              item.posicion === 3 ? 'bg-[#cd7f32] text-white' :
+              'bg-muted text-foreground'
+            }`}>
+              {item.posicion}
+            </span>
+            <div className="min-w-0">
+              <p className="font-medium text-foreground truncate">
+                {item.nombre} {item.apellido}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Nivel {item.nivel_actual} · {item.ejercicios_completados} ejercicios
+              </p>
+            </div>
+          </div>
+          <span className="font-bold text-primary shrink-0">
+            {item.puntos_totales.toLocaleString('es-ES')} pts
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UltimoIntentoSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-5 bg-secondary rounded w-3/4 mx-auto" />
+      <div className="h-12 bg-secondary rounded w-1/2 mx-auto" />
+      <div className="h-3 bg-secondary rounded w-1/3 mx-auto" />
+    </div>
+  );
+}
+
+function UltimoIntentoContenido({
+  intento,
+  estudianteNombre,
+}: {
+  intento: IntentoReciente;
+  estudianteNombre: string | null;
+}) {
+  const tipoLbl = intento.ejercicio_tipo ? (TIPO_LABEL[intento.ejercicio_tipo] ?? intento.ejercicio_tipo) : null;
+  return (
+    <div className="text-center py-2 space-y-3">
+      <div>
+        <h3 className="text-lg font-semibold text-foreground">
+          {intento.ejercicio_titulo ?? 'Ejercicio sin título'}
+        </h3>
+        {tipoLbl && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {tipoLbl}
+            {intento.ejercicio_compas && ` · ${intento.ejercicio_compas}`}
+            {intento.ejercicio_bpm_referencia ? ` · ${intento.ejercicio_bpm_referencia} BPM` : ''}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-center gap-6 text-muted-foreground">
+        <div>
+          <p className="text-3xl font-bold text-primary">{intento.puntuacion.toFixed(0)}</p>
+          <p className="text-xs">puntos</p>
+        </div>
+        <div className="border-l border-border pl-6 text-left">
+          <p className="text-sm font-medium text-foreground">
+            {estudianteNombre ?? 'Cargando estudiante…'}
+          </p>
+          <p className="text-xs">{formatFechaCorta(intento.fecha_intento)}</p>
+          <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded ${
+            intento.aprobado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
+            {intento.aprobado ? 'Aprobado' : 'No aprobado'}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
